@@ -904,7 +904,7 @@ function escapeHtml(text) {
 
 // --- 7. Real-Time Cloud Sync with Dad's Phone ---
 let cloudConfig = {
-  dbUrl: "",
+  dbUrl: "https://karthikeya-tracker-default-rtdb.firebaseio.com",
   syncKey: "karthikeya-study-family"
 };
 let isCloudSyncActive = false;
@@ -926,8 +926,12 @@ function handleUrlSyncParams() {
     const saved = localStorage.getItem("karthikeya_cloud_sync");
     if (saved) {
       try {
-        cloudConfig = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed.dbUrl) cloudConfig.dbUrl = parsed.dbUrl;
+        if (parsed.syncKey) cloudConfig.syncKey = parsed.syncKey;
       } catch (e) {}
+    } else {
+      localStorage.setItem("karthikeya_cloud_sync", JSON.stringify(cloudConfig));
     }
   }
 }
