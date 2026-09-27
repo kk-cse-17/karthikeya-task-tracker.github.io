@@ -110,6 +110,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Load stored data or initialize defaults
   loadDataFromStorage();
 
+  // Check URL parameters for instant phone sync connect
+  handleUrlSyncParams();
+
+  // Initialize Realtime Cloud Sync
+  initCloudSync();
+
   // Check for remembered user session
   const storedUser = localStorage.getItem("karthikeya_auth_user");
   if (storedUser) {
@@ -135,7 +141,7 @@ function loadDataFromStorage() {
     }
   } else {
     tasks = [...DEFAULT_TASKS];
-    saveTasksToStorage();
+    saveTasksToStorage(false);
   }
 
   const storedComments = localStorage.getItem("karthikeya_dad_comments");
@@ -147,16 +153,22 @@ function loadDataFromStorage() {
     }
   } else {
     dadComments = [...DEFAULT_COMMENTS];
-    saveCommentsToStorage();
+    saveCommentsToStorage(false);
   }
 }
 
-function saveTasksToStorage() {
+function saveTasksToStorage(syncCloud = true) {
   localStorage.setItem("karthikeya_tasks_data", JSON.stringify(tasks));
+  if (syncCloud && isCloudSyncActive && cloudDbRef) {
+    cloudDbRef.child("tasks").set(tasks).catch(err => console.warn("Cloud sync tasks error:", err));
+  }
 }
 
-function saveCommentsToStorage() {
+function saveCommentsToStorage(syncCloud = true) {
   localStorage.setItem("karthikeya_dad_comments", JSON.stringify(dadComments));
+  if (syncCloud && isCloudSyncActive && cloudDbRef) {
+    cloudDbRef.child("dadComments").set(dadComments).catch(err => console.warn("Cloud sync comments error:", err));
+  }
 }
 
 // --- Authentication & Role Switching ---
@@ -888,4 +900,228 @@ function escapeHtml(text) {
     "'": '&#039;'
   };
   return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// --- 7. Real-Time Cloud Sync with Dad's Phone ---
+let cloudConfig = {
+  dbUrl: "",
+  syncKey: "karthikeya-study-family"
+};
+let isCloudSyncActive = false;
+let cloudDbRef = null;
+
+function handleUrlSyncParams() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const syncDb = urlParams.get("syncDb");
+  const syncKey = urlParams.get("syncKey");
+
+  if (syncDb && syncKey) {
+    cloudConfig.dbUrl = decodeURIComponent(syncDb);
+    cloudConfig.syncKey = decodeURIComponent(syncKey);
+    localStorage.setItem("karthikeya_cloud_sync", JSON.stringify(cloudConfig));
+    // Clean URL query without reload
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  } else {
+    const saved = localStorage.getItem("karthikeya_cloud_sync");
+    if (saved) {
+      try {
+        cloudConfig = JSON.parse(saved);
+      } catch (e) {}
+    }
+  }
+}
+
+function initCloudSync() {
+  if (!cloudConfig.dbUrl || typeof firebase === 'undefined') {
+    updateSyncUI(false, "Local Offline Mode Active");
+    return;
+  }
+
+  try {
+    let app = firebase.apps.length ? firebase.app() : firebase.initializeApp({
+      databaseURL: cloudConfig.dbUrl
+    });
+
+    const db = firebase.database(app);
+    const cleanKey = (cloudConfig.syncKey || "karthikeya-study-family").replace(/[^a-zA-Z0-9_-]/g, "");
+    cloudDbRef = db.ref("karthikeya_trackers/" + cleanKey);
+
+    isCloudSyncActive = true;
+    updateSyncUI(true, "Connected to Dad's Phone (Real-Time)");
+
+    // Listen to live tasks updates
+    cloudDbRef.child("tasks").on("value", snapshot => {
+      if (snapshot.exists()) {
+        const remoteTasks = snapshot.val();
+        if (Array.isArray(remoteTasks)) {
+          tasks = remoteTasks;
+          localStorage.setItem("karthikeya_tasks_data", JSON.stringify(tasks));
+          refreshAllUI();
+        }
+      } else {
+        if (tasks.length > 0) {
+          cloudDbRef.child("tasks").set(tasks);
+        }
+      }
+    }, err => {
+      console.warn("Cloud tasks listener error:", err);
+    });
+
+    // Listen to live Dad's comments updates
+    cloudDbRef.child("dadComments").on("value", snapshot => {
+      if (snapshot.exists()) {
+        const remoteComments = snapshot.val();
+        if (Array.isArray(remoteComments)) {
+          const hadFewer = dadComments.length < remoteComments.length;
+          dadComments = remoteComments;
+          localStorage.setItem("karthikeya_dad_comments", JSON.stringify(dadComments));
+          refreshAllUI();
+
+          // If a new comment was posted by Dad, celebrate!
+          if (hadFewer && currentUser && currentUser.role === 'student') {
+            triggerCelebration();
+          }
+        }
+      } else {
+        if (dadComments.length > 0) {
+          cloudDbRef.child("dadComments").set(dadComments);
+        }
+      }
+    }, err => {
+      console.warn("Cloud comments listener error:", err);
+    });
+
+  } catch (err) {
+    console.error("Firebase init error:", err);
+    isCloudSyncActive = false;
+    updateSyncUI(false, "Connection Error: Check URL");
+  }
+}
+
+function updateSyncUI(connected, statusText) {
+  const btn = document.getElementById("cloudSyncStatusBtn");
+  const dot = document.getElementById("cloudSyncDot");
+  const ping = document.getElementById("cloudSyncPing");
+  const text = document.getElementById("cloudSyncText");
+  const banner = document.getElementById("syncStatusBanner");
+  const detail = document.getElementById("syncStatusDetailedText");
+
+  if (!btn) return;
+
+  if (connected) {
+    btn.className = "no-print flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-sm";
+    dot.className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
+    ping.classList.remove("hidden");
+    text.textContent = "Live Cloud Sync ✓";
+    
+    if (banner) {
+      banner.className = "p-4 rounded-2xl border text-xs font-semibold flex items-center justify-between bg-emerald-50 border-emerald-200 text-emerald-900";
+      detail.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i> Connected to Real-Time Cloud! Tasks and comments sync live with Dad's phone.`;
+    }
+  } else {
+    btn.className = "no-print flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 shadow-sm";
+    dot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
+    ping.classList.add("hidden");
+    text.textContent = "Connect Dad's Phone";
+
+    if (banner) {
+      banner.className = "p-4 rounded-2xl border text-xs font-semibold flex items-center justify-between bg-amber-50 border-amber-200 text-amber-900";
+      detail.innerHTML = `<i class="fa-solid fa-circle-exclamation text-amber-600 mr-1.5"></i> ${statusText || 'Running in Local Mode (Tasks saved on this computer only).'}`;
+    }
+  }
+}
+
+function openSyncModal() {
+  document.getElementById("syncModal").classList.remove("hidden");
+  document.getElementById("syncDbUrlInput").value = cloudConfig.dbUrl || "";
+  document.getElementById("syncKeyInput").value = cloudConfig.syncKey || "karthikeya-study-family";
+  renderSyncQrCode();
+}
+
+function closeSyncModal() {
+  document.getElementById("syncModal").classList.add("hidden");
+}
+
+function getDadShareLink() {
+  const currentBase = window.location.origin + window.location.pathname;
+  const dbUrl = encodeURIComponent(cloudConfig.dbUrl || "");
+  const syncKey = encodeURIComponent(cloudConfig.syncKey || "karthikeya-study-family");
+  return `${currentBase}?syncDb=${dbUrl}&syncKey=${syncKey}`;
+}
+
+function renderSyncQrCode() {
+  const qrContainer = document.getElementById("syncQrCode");
+  if (!qrContainer) return;
+  qrContainer.innerHTML = "";
+
+  const link = getDadShareLink();
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(qrContainer, {
+      text: link,
+      width: 120,
+      height: 120,
+      colorDark: "#312e81",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    qrContainer.innerHTML = `<p class="text-[10px] text-slate-400 text-center">QR Code Ready</p>`;
+  }
+}
+
+function copyDadShareLink() {
+  const link = getDadShareLink();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(() => {
+      const btn = document.getElementById("copyShareLinkBtn");
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>Copied Link!</span>`;
+      btn.classList.add("bg-emerald-600");
+      setTimeout(() => {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove("bg-emerald-600");
+      }, 2500);
+    }).catch(() => {
+      prompt("Copy Dad's invite link below:", link);
+    });
+  } else {
+    prompt("Copy Dad's invite link below:", link);
+  }
+}
+
+function openDadLinkInNewTab() {
+  window.open(getDadShareLink(), "_blank");
+}
+
+function saveAndConnectCloudSync() {
+  const dbUrl = document.getElementById("syncDbUrlInput").value.trim();
+  const syncKey = document.getElementById("syncKeyInput").value.trim() || "karthikeya-study-family";
+
+  if (!dbUrl) {
+    alert("Please enter your Firebase Realtime Database URL (e.g. https://your-project-id-default-rtdb.firebaseio.com)");
+    return;
+  }
+
+  cloudConfig.dbUrl = dbUrl;
+  cloudConfig.syncKey = syncKey;
+  localStorage.setItem("karthikeya_cloud_sync", JSON.stringify(cloudConfig));
+
+  initCloudSync();
+  renderSyncQrCode();
+  alert("Real-Time Cloud Sync connected! You can now scan the QR code with Dad's phone or send him the link so his phone connects too.");
+  closeSyncModal();
+}
+
+function disconnectCloudSync() {
+  if (confirm("Disconnect Cloud Sync and revert to local storage?")) {
+    cloudConfig.dbUrl = "";
+    localStorage.removeItem("karthikeya_cloud_sync");
+    if (cloudDbRef) {
+      cloudDbRef.off();
+    }
+    isCloudSyncActive = false;
+    updateSyncUI(false, "Local Offline Mode Active");
+    closeSyncModal();
+  }
 }
