@@ -73,7 +73,7 @@
             <i class="fa-regular fa-user mr-1 text-slate-400"></i> Username
           </label>
           <div class="relative">
-            <input type="text" id="loginUsername" required value="karthikeya"
+            <input type="text" id="loginUsername" required autocomplete="username"
               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/90 font-medium text-sm transition"
               placeholder="Enter username">
           </div>
@@ -84,7 +84,7 @@
             <i class="fa-solid fa-lock mr-1 text-slate-400"></i> Password
           </label>
           <div class="relative">
-            <input type="password" id="loginPassword" required value="study123"
+            <input type="password" id="loginPassword" required autocomplete="current-password"
               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/90 font-medium text-sm transition"
               placeholder="Enter password">
             <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 text-sm">
@@ -103,19 +103,6 @@
           <i class="fa-solid fa-arrow-right"></i>
         </button>
       </form>
-
-      <!-- Quick Demo Login Helpers -->
-      <div class="mt-6 pt-5 border-t border-slate-200/80 text-center">
-        <p class="text-xs text-slate-400 mb-2">Quick 1-Click Demo Login:</p>
-        <div class="flex items-center justify-center gap-2">
-          <button onclick="quickLogin('student')" class="text-xs px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold border border-indigo-200 transition">
-            👦 Log in as Karthikeya
-          </button>
-          <button onclick="quickLogin('dad')" class="text-xs px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-semibold border border-emerald-200 transition">
-            👨‍👦 Log in as Dad
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
