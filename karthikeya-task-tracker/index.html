@@ -67,13 +67,13 @@
       </div>
 
       <!-- Login Form -->
-      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+      <form id="loginForm" onsubmit="handleLogin(event)" autocomplete="off" class="space-y-4">
         <div>
           <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5" for="loginUsername">
             <i class="fa-regular fa-user mr-1 text-slate-400"></i> Username
           </label>
           <div class="relative">
-            <input type="text" id="loginUsername" required autocomplete="username"
+            <input type="text" id="loginUsername" required autocomplete="off"
               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/90 font-medium text-sm transition"
               placeholder="Enter username">
           </div>
@@ -84,7 +84,7 @@
             <i class="fa-solid fa-lock mr-1 text-slate-400"></i> Password
           </label>
           <div class="relative">
-            <input type="password" id="loginPassword" required autocomplete="current-password"
+            <input type="password" id="loginPassword" required autocomplete="new-password"
               class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/90 font-medium text-sm transition"
               placeholder="Enter password">
             <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 text-sm">
@@ -648,6 +648,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.5"></script>
 </body>
 </html>

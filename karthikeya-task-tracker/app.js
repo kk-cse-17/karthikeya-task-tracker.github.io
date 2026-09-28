@@ -181,22 +181,33 @@ function selectLoginRole(role) {
   const usernameInput = document.getElementById("loginUsername");
   const passwordInput = document.getElementById("loginPassword");
   const errorBox = document.getElementById("loginError");
-  errorBox.classList.add("hidden");
+  if (errorBox) errorBox.classList.add("hidden");
 
-  // Keep fields empty so user types credentials manually
-  usernameInput.value = "";
-  passwordInput.value = "";
+  // Force wipe both fields immediately
+  if (usernameInput) {
+    usernameInput.value = "";
+    usernameInput.defaultValue = "";
+  }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.defaultValue = "";
+  }
 
   if (role === 'student') {
     studentTab.className = "py-2.5 rounded-xl transition flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-sm";
     dadTab.className = "py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900";
-    usernameInput.placeholder = "Enter Karthikeya's username";
+    if (usernameInput) usernameInput.placeholder = "Enter username";
   } else {
     dadTab.className = "py-2.5 rounded-xl transition flex items-center justify-center gap-2 bg-white text-emerald-800 shadow-sm";
     studentTab.className = "py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900";
-    usernameInput.placeholder = "Enter Dad's username";
+    if (usernameInput) usernameInput.placeholder = "Enter username";
   }
-  usernameInput.focus();
+
+  // Clear again after browser event loop to defeat stubborn password autofill
+  setTimeout(() => {
+    if (usernameInput) usernameInput.value = "";
+    if (passwordInput) passwordInput.value = "";
+  }, 20);
 }
 
 function togglePasswordVisibility() {
@@ -278,12 +289,23 @@ function handleLogout() {
 function showLogin() {
   const usernameInput = document.getElementById("loginUsername");
   const passwordInput = document.getElementById("loginPassword");
-  if (usernameInput) usernameInput.value = "";
-  if (passwordInput) passwordInput.value = "";
+  if (usernameInput) {
+    usernameInput.value = "";
+    usernameInput.defaultValue = "";
+  }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.defaultValue = "";
+  }
   const errorBox = document.getElementById("loginError");
   if (errorBox) errorBox.classList.add("hidden");
   document.getElementById("loginSection").classList.remove("hidden");
   document.getElementById("appContainer").classList.add("hidden");
+
+  setTimeout(() => {
+    if (usernameInput) usernameInput.value = "";
+    if (passwordInput) passwordInput.value = "";
+  }, 20);
 }
 
 function showDashboard() {
