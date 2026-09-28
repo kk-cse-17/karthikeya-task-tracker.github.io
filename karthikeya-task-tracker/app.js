@@ -224,60 +224,61 @@ function togglePasswordVisibility() {
 
 function handleLogin(e) {
   e.preventDefault();
-  const username = document.getElementById("loginUsername").value.trim();
+  const username = document.getElementById("loginUsername").value.trim().toLowerCase();
   const password = document.getElementById("loginPassword").value.trim();
   const errorBox = document.getElementById("loginError");
   const errorText = document.getElementById("loginErrorText");
 
-  // Strict Authentication Check
-  let valid = false;
-  let userProfile = null;
+  errorBox.classList.add("hidden");
 
-  if (username.toLowerCase() === "karthikeya") {
-    if (password === "study123") {
-      valid = true;
-      userProfile = {
-        username: "karthikeya",
-        role: "student",
-        displayName: "Karthikeya"
-      };
-    } else {
+  if (!username || !password) {
+    errorText.textContent = "Please enter both username and password.";
+    errorBox.classList.remove("hidden");
+    return;
+  }
+
+  if (currentLoginRole === 'student') {
+    // Strict Karthikeya Verification
+    if (username !== "karthikeya") {
+      errorText.textContent = "Invalid username. Username must be exactly 'karthikeya'.";
+      errorBox.classList.remove("hidden");
+      return;
+    }
+    if (password !== "study123") {
       errorText.textContent = "Incorrect password for Karthikeya. Please try again.";
       errorBox.classList.remove("hidden");
       return;
     }
-  } else if (username.toLowerCase() === "dad") {
-    if (password === "dad123") {
-      valid = true;
-      userProfile = {
-        username: "dad",
-        role: "dad",
-        displayName: "Dad (Reviewer)"
-      };
-    } else {
+
+    currentUser = {
+      username: "karthikeya",
+      role: "student",
+      displayName: "Karthikeya"
+    };
+  } else {
+    // Strict Dad Verification
+    if (username !== "dad") {
+      errorText.textContent = "Invalid username. For Dad's review, username must be exactly 'dad'.";
+      errorBox.classList.remove("hidden");
+      return;
+    }
+    if (password !== "dad123") {
       errorText.textContent = "Incorrect password for Dad. Please try again.";
       errorBox.classList.remove("hidden");
       return;
     }
-  } else if (username.length > 0 && password.length > 0) {
-    // Custom user option
-    valid = true;
-    userProfile = {
-      username: username,
-      role: currentLoginRole,
-      displayName: username
+
+    currentUser = {
+      username: "dad",
+      role: "dad",
+      displayName: "Dad (Reviewer)"
     };
   }
 
-  if (valid) {
-    errorBox.classList.add("hidden");
-    currentUser = userProfile;
-    localStorage.setItem("karthikeya_auth_user", JSON.stringify(currentUser));
-    showDashboard();
-  } else {
-    errorText.textContent = "Please enter both username and password.";
-    errorBox.classList.remove("hidden");
-  }
+  // Login successful
+  errorBox.classList.add("hidden");
+  localStorage.setItem("karthikeya_auth_user", JSON.stringify(currentUser));
+  showDashboard();
 }
 
 function handleLogout() {
