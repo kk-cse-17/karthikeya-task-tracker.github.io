@@ -261,7 +261,10 @@
             </p>
           </div>
 
-          <div class="flex items-center gap-2 self-start md:self-auto">
+          <div class="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            <button onclick="openSyncTransferModal()" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white shadow flex items-center gap-1.5 transition" title="Transfer observations and pictures between local and team cloud">
+              <span>🔄 Sync / Transfer to Team</span>
+            </button>
             <button onclick="openAddObservationModal()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white shadow flex items-center gap-1.5 transition">
               <span>+ Add Written Observation</span>
             </button>
@@ -432,6 +435,56 @@
     </div>
   </div>
 
+  <!-- Sync & Transfer Modal (Bridge between Local file:// and Online GitHub) -->
+  <div id="syncTransferModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔄</span>
+          <div>
+            <h3 class="text-base font-bold text-white">Sync Notes &amp; Pictures to Team</h3>
+            <p class="text-[11px] text-slate-400">Transfer data from local file:// to online team link &amp; Firebase</p>
+          </div>
+        </div>
+        <button onclick="closeSyncTransferModal()" class="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-400 flex items-center gap-1.5">
+              <span>Step 1:</span> On Local file:/// link
+            </span>
+            <span class="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800" id="sync-export-count"></span>
+          </div>
+          <p class="text-slate-400 text-[11px]">Click below to copy all your notes and pictures into a single sync code:</p>
+          <button onclick="copyAllLocalDataToClipboard()" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow transition flex items-center justify-center gap-2 text-xs">
+            <span>📋 Copy All My Notes &amp; Pictures Code</span>
+          </button>
+          <span id="copy-status-msg" class="text-[11px] text-emerald-400 font-semibold hidden text-center block bg-emerald-950/50 py-1 rounded border border-emerald-500/30">✓ Copied to clipboard! Now open the online link &amp; click Paste.</span>
+        </div>
+
+        <div class="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sky-400 flex items-center gap-1.5">
+              <span>Step 2:</span> On Online GitHub Link
+            </span>
+            <span class="text-[10px] text-sky-300 font-mono bg-sky-950/50 px-2 py-0.5 rounded border border-sky-800/40">Publishes to All 3 Teammates</span>
+          </div>
+          <p class="text-slate-400 text-[11px]">Paste the sync code below and click publish to sync with Firebase:</p>
+          <textarea id="sync-import-payload" rows="3" placeholder="Paste your copied sync code here..." class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white font-mono text-[10px] focus:outline-none focus:border-sky-500"></textarea>
+          <button onclick="importAndPublishToFirebase()" class="w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-bold text-white shadow transition flex items-center justify-center gap-2 text-xs">
+            <span>🚀 Publish to Cloud &amp; All Teammates</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button onclick="closeSyncTransferModal()" class="px-4 py-1.5 rounded-lg text-slate-400 hover:text-white text-xs">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const INR_PER_1M_INPUT = 255.0;
     const RETRIEVAL_OVERHEAD_INR = 0.0000425;
@@ -497,6 +550,9 @@
 
     let obsRef = null;
     let rtdbObsEventSource = null;
+    let screenRef = null;
+    let rtdbScreenEventSource = null;
+    let hasLoadedInitialScreenshots = false;
 
     function initFirebaseSync() {
       // 1. Initial fast load from shared database
@@ -520,6 +576,15 @@
         })
         .catch(err => console.warn("Initial observations fetch:", err));
 
+      fetch(`${FIREBASE_DB_URL}/shared_screenshots.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.items && Array.isArray(data.items) && data.items.length > 0) {
+            handleIncomingRemoteScreenshots(data.items);
+          }
+        })
+        .catch(err => console.warn("Initial screenshots fetch:", err));
+
       // 2. Attach WebSocket Listener via Firebase Database SDK
       try {
         if (typeof firebase !== 'undefined' && firebase.database) {
@@ -533,6 +598,7 @@
           const db = firebase.database();
           dbRef = db.ref('shared_table_data');
           obsRef = db.ref('shared_observations');
+          screenRef = db.ref('shared_screenshots');
 
           dbRef.on('value', (snapshot) => {
             const val = snapshot.val();
@@ -548,6 +614,13 @@
             const val = snapshot.val();
             if (val && val.items && Array.isArray(val.items)) {
               handleIncomingRemoteObservations(val.items);
+            }
+          });
+
+          screenRef.on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val && val.items && Array.isArray(val.items)) {
+              handleIncomingRemoteScreenshots(val.items);
             }
           });
           return;
@@ -594,6 +667,24 @@
           });
         } catch (err) {
           console.warn("EventSource observations setup notice:", err);
+        }
+      }
+
+      if (!rtdbScreenEventSource) {
+        try {
+          rtdbScreenEventSource = new EventSource(`${FIREBASE_DB_URL}/shared_screenshots.json`);
+          rtdbScreenEventSource.addEventListener('put', (e) => {
+            try {
+              const parsed = JSON.parse(e.data);
+              if (parsed && parsed.data && parsed.data.items && Array.isArray(parsed.data.items)) {
+                handleIncomingRemoteScreenshots(parsed.data.items);
+              }
+            } catch (err) {
+              console.warn("SSE screenshots parse error:", err);
+            }
+          });
+        } catch (err) {
+          console.warn("EventSource screenshots setup notice:", err);
         }
       }
     }
@@ -650,6 +741,25 @@
       renderObservations();
     }
 
+    function handleIncomingRemoteScreenshots(remotePics) {
+      if (JSON.stringify(remotePics) === JSON.stringify(screenshots)) {
+        hasLoadedInitialScreenshots = true;
+        return;
+      }
+
+      const isFirst = !hasLoadedInitialScreenshots;
+      hasLoadedInitialScreenshots = true;
+
+      screenshots = remotePics;
+      localStorage.setItem('ast_dashboard_screenshots_v1', JSON.stringify(screenshots));
+
+      if (!isFirst) {
+        triggerSystemChangeAlert("System alert: New screenshots uploaded by team members");
+      }
+
+      renderGallery();
+    }
+
     function saveToStorage() {
       // 1. Local backup for instant responsiveness & offline safety
       localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
@@ -664,11 +774,19 @@
           pushViaRest(testData);
         });
         if (obsRef) {
-          obsRef.set({ items: observations, updatedAt: Date.now() }).catch(() => {});
+          obsRef.set({ items: observations, updatedAt: Date.now() }).catch(() => {
+            pushObservationsViaRest(observations);
+          });
+        }
+        if (screenRef) {
+          screenRef.set({ items: screenshots, updatedAt: Date.now() }).catch(() => {
+            pushScreenshotsViaRest(screenshots);
+          });
         }
       } else {
         pushViaRest(testData);
         pushObservationsViaRest(observations);
+        pushScreenshotsViaRest(screenshots);
       }
     }
 
@@ -689,6 +807,16 @@
         body: JSON.stringify({ items: items, updatedAt: Date.now() })
       }).catch(err => {
         console.error("Firebase observations REST write error:", err);
+      });
+    }
+
+    function pushScreenshotsViaRest(items) {
+      fetch(`${FIREBASE_DB_URL}/shared_screenshots.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: items, updatedAt: Date.now() })
+      }).catch(err => {
+        console.error("Firebase screenshots REST write error:", err);
       });
     }
 
@@ -902,21 +1030,114 @@
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        const imageSrc = e.target.result;
-        const caption = prompt("Enter a brief caption for this screenshot:", `Baseline Screenshot ${screenshots.length + 1}`);
+        // High quality client-side canvas compression for smooth Firebase real-time sync
+        const img = new Image();
+        img.onload = function() {
+          const maxWidth = 1200;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxWidth) {
+            h = Math.round((h * maxWidth) / w);
+            w = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
 
-        screenshots.push({
-          id: screenshots.length + 1,
-          imageSrc,
-          caption: caption || `Screenshot #${screenshots.length + 1}`,
-          date: new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
-        });
+          const caption = prompt("Enter a brief caption for this screenshot:", `Baseline Screenshot ${screenshots.length + 1}`);
 
-        saveToStorage();
-        renderGallery();
+          screenshots.push({
+            id: screenshots.length + 1,
+            imageSrc: compressedDataUrl,
+            caption: caption || `Screenshot #${screenshots.length + 1}`,
+            date: new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          });
+
+          saveToStorage();
+          renderGallery();
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
       event.target.value = ''; // reset input
+    }
+
+    // --- Sync & Transfer Modal (Bridge between Local file:// and Online Cloud) ---
+    function openSyncTransferModal() {
+      playChangeSound(false);
+      const countLabel = document.getElementById('sync-export-count');
+      if (countLabel) {
+        countLabel.textContent = `${observations.length} Notes, ${screenshots.length} Pictures`;
+      }
+      document.getElementById('syncTransferModal').classList.remove('hidden');
+    }
+
+    function closeSyncTransferModal() {
+      playChangeSound(false);
+      document.getElementById('syncTransferModal').classList.add('hidden');
+    }
+
+    function copyAllLocalDataToClipboard() {
+      playChangeSound(false);
+      const payload = {
+        observations: observations,
+        screenshots: screenshots,
+        tableData: testData,
+        exportedAt: Date.now()
+      };
+      const jsonStr = JSON.stringify(payload);
+      
+      const showSuccess = () => {
+        const msg = document.getElementById('copy-status-msg');
+        if (msg) {
+          msg.classList.remove('hidden');
+          setTimeout(() => msg.classList.add('hidden'), 5000);
+        }
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(jsonStr).then(showSuccess).catch(() => {
+          prompt("Copy this sync code (Ctrl+C):", jsonStr);
+          showSuccess();
+        });
+      } else {
+        prompt("Copy this sync code (Ctrl+C):", jsonStr);
+        showSuccess();
+      }
+    }
+
+    function importAndPublishToFirebase() {
+      playChangeSound(false);
+      const raw = document.getElementById('sync-import-payload').value.trim();
+      if (!raw) {
+        alert("Please paste the sync code first!");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.observations && Array.isArray(parsed.observations) && parsed.observations.length > 0) {
+          observations = parsed.observations;
+          localStorage.setItem('ast_dashboard_observations_v1', JSON.stringify(observations));
+        }
+        if (parsed.screenshots && Array.isArray(parsed.screenshots) && parsed.screenshots.length > 0) {
+          screenshots = parsed.screenshots;
+          localStorage.setItem('ast_dashboard_screenshots_v1', JSON.stringify(screenshots));
+        }
+        if (parsed.tableData && Array.isArray(parsed.tableData) && parsed.tableData.length > 0) {
+          testData = parsed.tableData;
+          localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
+        }
+        
+        saveToStorage();
+        renderAll();
+        closeSyncTransferModal();
+        alert(`Success! Imported ${observations.length} notes and ${screenshots.length} pictures. All data is now published live to Firebase and your team!`);
+      } catch (e) {
+        alert("Invalid sync code. Please check that you copied the complete code and try again.");
+      }
     }
 
     function renderGallery() {
