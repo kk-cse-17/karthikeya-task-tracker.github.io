@@ -987,9 +987,30 @@
       }
     }
 
-    // Unlock audio context on initial user click or keypress
-    ['click', 'keydown', 'touchstart'].forEach(evt => {
-      window.addEventListener(evt, () => { getAudioContext(); }, { once: false, passive: true });
+    // Unlock audio context and speech synthesis on initial user click or interaction
+    let isAudioUnlocked = false;
+    function unlockAudio() {
+      getAudioContext();
+      if (!isAudioUnlocked && 'speechSynthesis' in window) {
+        try {
+          const silent = new SpeechSynthesisUtterance('');
+          silent.volume = 0;
+          window.speechSynthesis.speak(silent);
+        } catch(e) {}
+        isAudioUnlocked = true;
+      }
+    }
+
+    ['click', 'keydown', 'touchstart', 'mousedown'].forEach(evt => {
+      window.addEventListener(evt, unlockAudio, { passive: true });
+    });
+
+    // Pressing Enter in any editable cell commits and saves immediately
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('cell-editable')) {
+        e.preventDefault();
+        e.target.blur();
+      }
     });
 
     // Sound effect played when anyone modifies anything in any tab or switches tabs!
