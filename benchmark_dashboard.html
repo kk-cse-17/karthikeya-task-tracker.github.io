@@ -52,7 +52,7 @@
       <!-- Quick Actions -->
       <div class="flex items-center gap-2">
         <button onclick="testSystemAlertVoice()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition shadow">
-          <span>🚨 Test Siren & System Voice</span>
+          <span>🔊 Test System Voice</span>
         </button>
         <button onclick="testCommitAlertSound()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white flex items-center gap-1.5 transition shadow">
           <span>🔊 Test Commit Sound</span>
@@ -1122,79 +1122,71 @@
       }
     }
 
-    // Emergency / tactical alarm siren sound playing in background while system voice speaks
-    function playAlarmSiren(durationSeconds = 3.8) {
+    // High-tech warning alarm beep siren playing in background while system voice speaks
+    function playWarningAlarmBeeps(durationSeconds = 3.8) {
       try {
         const ctx = getAudioContext();
         if (!ctx) return;
 
-        const startSiren = () => {
+        const startBeeps = () => {
           const now = ctx.currentTime;
-          
-          // Dual oscillators for a rich, authentic warning alarm siren
-          const osc1 = ctx.createOscillator();
-          const osc2 = ctx.createOscillator();
-          const gainNode = ctx.createGain();
-          const filter = ctx.createBiquadFilter();
+          const beepLen = 0.15; // length of each warning alarm pulse
+          const interval = 0.32; // rhythmic interval (~3 alarm beeps per second)
+          const totalBeeps = Math.floor(durationSeconds / interval);
 
-          // Warm lowpass filter so siren is rounded and punchy (no ear piercing harshness)
-          filter.type = "lowpass";
-          filter.frequency.setValueAtTime(2200, now);
+          for (let i = 0; i < totalBeeps; i++) {
+            const beepStart = now + (i * interval);
+            // Alternating two-tone warning frequencies (960Hz and 800Hz)
+            const freq = (i % 2 === 0) ? 960 : 800;
 
-          osc1.type = "sawtooth";
-          osc2.type = "triangle";
+            const osc = ctx.createOscillator();
+            const oscHarmonic = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
 
-          const cycleLen = 0.65; // ~0.65s per siren pitch sweep cycle
-          const numCycles = Math.ceil(durationSeconds / cycleLen);
+            osc.type = "sawtooth";
+            oscHarmonic.type = "sine";
 
-          // Siren sweeps smoothly between 620Hz and 980Hz
-          osc1.frequency.setValueAtTime(620, now);
-          osc2.frequency.setValueAtTime(624, now); // subtle detune for chorus siren effect
+            osc.frequency.setValueAtTime(freq, beepStart);
+            oscHarmonic.frequency.setValueAtTime(freq * 1.5, beepStart);
 
-          for (let i = 0; i < numCycles; i++) {
-            const upTime = now + (i * cycleLen) + (cycleLen * 0.45);
-            const downTime = now + ((i + 1) * cycleLen);
+            filter.type = "lowpass";
+            filter.frequency.setValueAtTime(2400, beepStart);
 
-            osc1.frequency.linearRampToValueAtTime(980, upTime);
-            osc2.frequency.linearRampToValueAtTime(984, upTime);
+            // Punchy warning alarm beep envelope
+            gain.gain.setValueAtTime(0.001, beepStart);
+            gain.gain.linearRampToValueAtTime(0.20, beepStart + 0.02);
+            gain.gain.setValueAtTime(0.20, beepStart + beepLen - 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, beepStart + beepLen);
 
-            osc1.frequency.linearRampToValueAtTime(620, downTime);
-            osc2.frequency.linearRampToValueAtTime(624, downTime);
+            osc.connect(filter);
+            oscHarmonic.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(beepStart);
+            oscHarmonic.start(beepStart);
+            osc.stop(beepStart + beepLen);
+            oscHarmonic.stop(beepStart + beepLen);
           }
-
-          // Background volume envelope: clearly audible siren that blends under the voice
-          gainNode.gain.setValueAtTime(0.01, now);
-          gainNode.gain.linearRampToValueAtTime(0.20, now + 0.12);
-          gainNode.gain.setValueAtTime(0.20, now + durationSeconds - 0.5);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, now + durationSeconds);
-
-          osc1.connect(filter);
-          osc2.connect(filter);
-          filter.connect(gainNode);
-          gainNode.connect(ctx.destination);
-
-          osc1.start(now);
-          osc2.start(now);
-          osc1.stop(now + durationSeconds);
-          osc2.stop(now + durationSeconds);
         };
 
         if (ctx.state === 'suspended') {
-          ctx.resume().then(startSiren).catch(startSiren);
+          ctx.resume().then(startBeeps).catch(startBeeps);
         } else {
-          startSiren();
+          startBeeps();
         }
       } catch (e) {
-        console.warn("Alarm siren notice:", e);
+        console.warn("Alarm beep notice:", e);
       }
     }
 
     function triggerSystemChangeAlert(message) {
-      // 1. Play background alarm siren
-      playAlarmSiren(3.8);
+      // 1. Play background warning alarm beeps
+      playWarningAlarmBeeps(3.8);
       // 2. Play alert chime at onset
       playChangeSound(true);
-      // 3. Spoken voice announces simultaneously over the siren
+      // 3. Spoken voice announces simultaneously over the warning alarm beeps
       announceSystemVoiceAlert(message);
       // 4. Visual top notification banner
       showSystemAlertNotification(message);
