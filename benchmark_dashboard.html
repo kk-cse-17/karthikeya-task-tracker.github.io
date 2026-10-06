@@ -51,13 +51,28 @@
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-2">
+        <button onclick="testSystemAlertVoice()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition shadow">
+          <span>🔊 Test System Alert Voice</span>
+        </button>
         <button onclick="testCommitAlertSound()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white flex items-center gap-1.5 transition shadow">
-          <span>🔊 Test "New Commit" Sound</span>
+          <span>🔊 Test Commit Sound</span>
         </button>
         <button onclick="exportToCSV()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1.5 shadow">
           <span>Export CSV</span>
         </button>
       </div>
+    </div>
+
+    <!-- Live System Change Alert Bar -->
+    <div id="system-alert-bar" class="hidden mt-4 p-3 bg-emerald-950/80 border border-emerald-500/60 rounded-xl flex items-center justify-between text-xs text-emerald-200 shadow-lg animate-pulse">
+      <div class="flex items-center gap-2.5">
+        <span class="text-base">📢</span>
+        <div>
+          <span class="font-bold text-white uppercase tracking-wider text-[10px] bg-emerald-500/30 px-1.5 py-0.5 rounded border border-emerald-500/40 mr-1.5">System Alert</span>
+          <span id="system-alert-text" class="font-semibold text-white">New changes in question table by team members</span>
+        </div>
+      </div>
+      <button onclick="document.getElementById('system-alert-bar').classList.add('hidden')" class="text-emerald-400 hover:text-white font-bold">&times;</button>
     </div>
 
     <!-- Live Commit Notification Alert Bar -->
@@ -588,7 +603,7 @@
 
       testData = remoteRows;
       localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
-      playChangeSound(true); // Sound played when a teammate changes something in Table or Cards!
+      triggerSystemChangeAlert("System alert: New changes in question table by team members");
 
       const activeEl = document.activeElement;
       const isEditing = activeEl && activeEl.classList && activeEl.classList.contains('cell-editable') && activeEl.closest('#full-table-body');
@@ -608,7 +623,7 @@
       if (JSON.stringify(remoteObs) === JSON.stringify(observations)) return;
       observations = remoteObs;
       localStorage.setItem('ast_dashboard_observations_v1', JSON.stringify(observations));
-      playChangeSound(true); // Sound played when a teammate adds or edits an observation!
+      triggerSystemChangeAlert("System alert: New changes in observations by team members");
       renderObservations();
     }
 
@@ -1010,6 +1025,38 @@
       } catch (e) {
         console.log("Audio error:", e);
       }
+    }
+
+    function announceSystemVoiceAlert(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.0;
+        utter.pitch = 1.05;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function showSystemAlertNotification(message) {
+      const bar = document.getElementById('system-alert-bar');
+      const textSpan = document.getElementById('system-alert-text');
+      if (bar && textSpan) {
+        textSpan.textContent = message.replace(/^System alert:\s*/i, '');
+        bar.classList.remove('hidden');
+        setTimeout(() => {
+          if (bar) bar.classList.add('hidden');
+        }, 6000);
+      }
+    }
+
+    function triggerSystemChangeAlert(message) {
+      playChangeSound(true);
+      announceSystemVoiceAlert(message);
+      showSystemAlertNotification(message);
+    }
+
+    function testSystemAlertVoice() {
+      triggerSystemChangeAlert("System alert: New changes in question table by team members");
     }
 
     function announceCommitVoice(author, message) {
