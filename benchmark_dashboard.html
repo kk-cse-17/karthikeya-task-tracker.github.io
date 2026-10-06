@@ -598,12 +598,24 @@
       }
     }
 
+    let hasLoadedInitialRows = false;
+    let hasLoadedInitialObs = false;
+
     function handleIncomingRemoteRows(remoteRows) {
-      if (JSON.stringify(remoteRows) === JSON.stringify(testData)) return;
+      if (JSON.stringify(remoteRows) === JSON.stringify(testData)) {
+        hasLoadedInitialRows = true;
+        return;
+      }
+
+      const isFirst = !hasLoadedInitialRows;
+      hasLoadedInitialRows = true;
 
       testData = remoteRows;
       localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
-      triggerSystemChangeAlert("System alert: New changes in question table by team members");
+
+      if (!isFirst) {
+        triggerSystemChangeAlert("System alert: New changes in question table by team members");
+      }
 
       const activeEl = document.activeElement;
       const isEditing = activeEl && activeEl.classList && activeEl.classList.contains('cell-editable') && activeEl.closest('#full-table-body');
@@ -620,10 +632,21 @@
     }
 
     function handleIncomingRemoteObservations(remoteObs) {
-      if (JSON.stringify(remoteObs) === JSON.stringify(observations)) return;
+      if (JSON.stringify(remoteObs) === JSON.stringify(observations)) {
+        hasLoadedInitialObs = true;
+        return;
+      }
+
+      const isFirst = !hasLoadedInitialObs;
+      hasLoadedInitialObs = true;
+
       observations = remoteObs;
       localStorage.setItem('ast_dashboard_observations_v1', JSON.stringify(observations));
-      triggerSystemChangeAlert("System alert: New changes in observations by team members");
+
+      if (!isFirst) {
+        triggerSystemChangeAlert("System alert: New changes in observations by team members");
+      }
+
       renderObservations();
     }
 
@@ -712,6 +735,7 @@
     }
 
     function switchTab(tab) {
+      playChangeSound(false);
       ['table', 'questions', 'calc', 'observations', 'sync'].forEach(t => {
         document.getElementById(`view-${t}`).classList.add('hidden');
         document.getElementById(`tab-btn-${t}`).classList.remove('tab-active');
@@ -820,6 +844,7 @@
     }
 
     function openAddObservationModal() {
+      playChangeSound(false);
       populateObservationDropdown();
       const titleInput = document.getElementById('new-obs-title');
       titleInput.value = '';
@@ -829,6 +854,7 @@
     }
 
     function closeAddObservationModal() {
+      playChangeSound(false);
       document.getElementById('addObservationModal').classList.add('hidden');
     }
 
@@ -926,12 +952,14 @@
     }
 
     function openLightbox(src, caption) {
+      playChangeSound(false);
       document.getElementById('lightbox-img').src = src;
       document.getElementById('lightbox-caption').textContent = caption;
       document.getElementById('imageLightboxModal').classList.remove('hidden');
     }
 
     function closeLightbox() {
+      playChangeSound(false);
       document.getElementById('imageLightboxModal').classList.add('hidden');
     }
 
@@ -964,40 +992,48 @@
       window.addEventListener(evt, () => { getAudioContext(); }, { once: false, passive: true });
     });
 
-    // Sound effect played when anyone modifies anything in any tab!
+    // Sound effect played when anyone modifies anything in any tab or switches tabs!
     function playChangeSound(isRemote = false) {
       try {
         const ctx = getAudioContext();
         if (!ctx) return;
-        const now = ctx.currentTime;
 
-        if (isRemote) {
-          // Melodic 2-tone chime when a teammate on another screen makes a change
-          [784.0, 1046.5].forEach((freq, i) => {
+        const triggerTone = () => {
+          const now = ctx.currentTime;
+          if (isRemote) {
+            // Melodic 3-tone alert chime (C6 -> E6 -> G6) for remote team member edits
+            [784.0, 1046.5, 1318.5].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(freq, now + i * 0.08);
+              gain.gain.setValueAtTime(0.3, now + i * 0.08);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + i * 0.08);
+              osc.stop(now + i * 0.08 + 0.25);
+            });
+          } else {
+            // Crisp interactive tone for local changes across ALL tabs
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = "sine";
-            osc.frequency.setValueAtTime(freq, now + i * 0.09);
-            gain.gain.setValueAtTime(0.2, now + i * 0.09);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.22);
+            osc.frequency.setValueAtTime(880.0, now);
+            osc.frequency.exponentialRampToValueAtTime(1320.0, now + 0.07);
+            gain.gain.setValueAtTime(0.24, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
             osc.connect(gain);
             gain.connect(ctx.destination);
-            osc.start(now + i * 0.09);
-            osc.stop(now + i * 0.09 + 0.22);
-          });
+            osc.start(now);
+            osc.stop(now + 0.09);
+          }
+        };
+
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(triggerTone).catch(triggerTone);
         } else {
-          // Crisp subtle confirmation droplet when you make a change
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(880.0, now);
-          osc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.08);
-          gain.gain.setValueAtTime(0.16, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.1);
+          triggerTone();
         }
       } catch (e) {
         console.log("Audio notice:", e);
@@ -1008,20 +1044,28 @@
       try {
         const ctx = getAudioContext();
         if (!ctx) return;
-        const now = ctx.currentTime;
 
-        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(freq, now + i * 0.08);
-          gain.gain.setValueAtTime(0.2, now + i * 0.08);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now + i * 0.08);
-          osc.stop(now + i * 0.08 + 0.2);
-        });
+        const triggerCommit = () => {
+          const now = ctx.currentTime;
+          [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            gain.gain.setValueAtTime(0.25, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.2);
+          });
+        };
+
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(triggerCommit).catch(triggerCommit);
+        } else {
+          triggerCommit();
+        }
       } catch (e) {
         console.log("Audio error:", e);
       }
@@ -1029,11 +1073,19 @@
 
     function announceSystemVoiceAlert(text) {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.rate = 1.0;
-        utter.pitch = 1.05;
-        window.speechSynthesis.speak(utter);
+        try {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.rate = 1.0;
+          utter.pitch = 1.05;
+          utter.volume = 1.0;
+          const voices = window.speechSynthesis.getVoices();
+          const engVoice = voices.find(v => (v.lang && v.lang.startsWith('en')) || (v.name && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft'))));
+          if (engVoice) utter.voice = engVoice;
+          window.speechSynthesis.speak(utter);
+        } catch (e) {
+          console.warn("Speech error:", e);
+        }
       }
     }
 
@@ -1334,6 +1386,7 @@
     }
 
     function exportToCSV() {
+      playChangeSound(false);
       let csv = "#,Question,Base In,Our In,Base Thinking,Base Out,Our Out,Base Calls,Our Calls,Base Cost (INR),Our Cost (INR),Base Time,Our Time,Base Correct,Our Correct,Context\n";
       testData.forEach(r => {
         csv += `"${r.id}","${r.question.replace(/"/g, '""')}","${r.baseIn}","${r.ourIn}","${r.baseThinking || 0}","${r.baseOut || 150}","${r.ourOut || 150}","${r.baseCalls || 1}","${r.ourCalls || 1}","${r.baseCost}","${r.ourCost}","${r.baseTime}","${r.ourTime}","${r.baseCorrect}","${r.ourCorrect}","${(r.context || '').replace(/"/g, '""')}"\n`;
