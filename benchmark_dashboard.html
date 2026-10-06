@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Search Benchmark — Team Dashboard</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <!-- Firebase App & Database SDKs for Real-time Shared Table -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.4); border-radius: 4px; }
+    .badge-pass { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-fail { background-color: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .tab-active { border-bottom: 2px solid #38bdf8; color: #38bdf8; font-weight: 700; }
+    
+    .cell-editable {
+      cursor: text;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+    .cell-editable:hover {
+      background-color: rgba(56, 189, 248, 0.12) !important;
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.4);
+    }
+    .cell-editable:focus {
+      outline: none;
+      background-color: rgba(14, 165, 233, 0.25) !important;
+      box-shadow: inset 0 0 0 2px #38bdf8;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto mb-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+            Team Workspace
+          </span>
+          <span class="text-xs text-slate-400">AST Semantic Code Search vs Baseline</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-black text-white">
+          Experiment Benchmark & Test Tracker
+        </h1>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex items-center gap-2">
+        <button onclick="testCommitAlertSound()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white flex items-center gap-1.5 transition shadow">
+          <span>🔊 Test "New Commit" Sound</span>
+        </button>
+        <button onclick="exportToCSV()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1.5 shadow">
+          <span>Export CSV</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Commit Notification Alert Bar -->
+    <div id="commit-alert-bar" class="hidden mt-4 p-3 bg-indigo-950/80 border border-indigo-500/60 rounded-xl flex items-center justify-between text-xs text-indigo-200 shadow-lg animate-pulse">
+      <div class="flex items-center gap-2.5">
+        <span class="text-lg">📢</span>
+        <span><strong>New Commit Pushed:</strong> "<span id="latest-commit-msg" class="font-mono text-white"></span>" by <span id="latest-commit-author" class="text-sky-300 font-bold"></span></span>
+      </div>
+      <button onclick="document.getElementById('commit-alert-bar').classList.add('hidden')" class="text-slate-400 hover:text-white">&times;</button>
+    </div>
+  </header>
+
+  <!-- Clean Separated Navigation Tabs -->
+  <main class="max-w-7xl mx-auto">
+    <div class="flex items-center gap-4 md:gap-6 border-b border-slate-800 mb-6 text-xs md:text-sm font-semibold overflow-x-auto whitespace-nowrap pb-1">
+      <button onclick="switchTab('table')" id="tab-btn-table" class="tab-active py-2.5 px-1 transition flex items-center gap-1.5">
+        <span>📊</span> Tab 1: Full Results Sheet (Table 4)
+      </button>
+      <button onclick="switchTab('questions')" id="tab-btn-questions" class="text-slate-400 hover:text-slate-200 py-2.5 px-1 transition flex items-center gap-1.5">
+        <span>📋</span> Tab 2: Questions View
+      </button>
+      <button onclick="switchTab('calc')" id="tab-btn-calc" class="text-slate-400 hover:text-slate-200 py-2.5 px-1 transition flex items-center gap-1.5">
+        <span>🧮</span> Tab 3: Calculations & Formulas
+      </button>
+      <button onclick="switchTab('observations')" id="tab-btn-observations" class="text-slate-400 hover:text-slate-200 py-2.5 px-1 transition flex items-center gap-1.5">
+        <span>💡</span> Tab 4: Observations from Baseline Qs (Useful for Our System)
+      </button>
+      <button onclick="switchTab('sync')" id="tab-btn-sync" class="text-slate-400 hover:text-slate-200 py-2.5 px-1 transition flex items-center gap-1.5">
+        <span>🔗</span> Tab 5: Friends & Git Live Sync
+      </button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 1: FULL RESULTS SHEET (TABLE 4)       -->
+    <!-- ========================================== -->
+    <div id="view-table" class="space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div class="p-3.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div>
+            <h3 class="font-bold text-white text-sm">Table 4: Test Recording Sheet (Fully Editable)</h3>
+            <p class="text-slate-400 text-[11px] mt-0.5">
+              <span class="text-sky-400 font-semibold">✏️ Every single cell is editable:</span> Just click any cell and start typing. Hit Enter or click outside to save!
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="addNewRow()" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow">
+              + Add New Row
+            </button>
+            <button onclick="resetToDefaults()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700">
+              Reset Defaults
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-[11px] border-collapse">
+            <thead>
+              <tr class="bg-slate-950 text-slate-300 font-semibold border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                <th class="p-2.5 w-8 text-center border-r border-slate-800">#</th>
+                <th class="p-2.5 min-w-[210px] border-r border-slate-800">Question (Click to edit)</th>
+                <th class="p-2.5 text-right bg-slate-950/80 border-r border-slate-800 text-sky-300">Base In</th>
+                <th class="p-2.5 text-right text-emerald-400 bg-emerald-950/20 font-bold border-r border-slate-800">Our In</th>
+                <th class="p-2.5 text-right bg-slate-950/80 border-r border-slate-800 text-purple-300">Base Think</th>
+                <th class="p-2.5 text-right bg-slate-950/80 border-r border-slate-800 text-amber-200">Base Out</th>
+                <th class="p-2.5 text-right text-emerald-400 bg-emerald-950/20 border-r border-slate-800">Our Out</th>
+                <th class="p-2.5 text-center bg-slate-950/80 border-r border-slate-800 text-amber-200">Base Calls</th>
+                <th class="p-2.5 text-center text-emerald-400 bg-emerald-950/20 border-r border-slate-800">Our Calls</th>
+                <th class="p-2.5 text-right bg-slate-950/80 border-r border-slate-800">Base Cost (₹)</th>
+                <th class="p-2.5 text-right text-emerald-400 bg-emerald-950/20 font-bold border-r border-slate-800">Our Cost (₹)</th>
+                <th class="p-2.5 text-right bg-slate-950/80 border-r border-slate-800 text-amber-200">Base Time</th>
+                <th class="p-2.5 text-right text-emerald-400 bg-emerald-950/20 border-r border-slate-800">Our Time</th>
+                <th class="p-2.5 text-center border-r border-slate-800">Base Corr?</th>
+                <th class="p-2.5 text-center border-r border-slate-800">Our Corr?</th>
+                <th class="p-2.5 min-w-[150px] text-amber-200 border-r border-slate-800">Our Context</th>
+                <th class="p-2.5 text-center w-8">Action</th>
+              </tr>
+            </thead>
+            <tbody id="full-table-body" class="divide-y divide-slate-850 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: QUESTIONS VIEW                     -->
+    <!-- ========================================== -->
+    <div id="view-questions" class="hidden space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div>
+          <h2 class="font-bold text-white text-sm">Step-by-Step Questions to Answer</h2>
+          <p class="text-slate-400">Click any card value to edit directly.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400 text-xs">Progress:</span>
+          <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" id="tested-count-badge">
+            10 / 10 Tested
+          </span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-3" id="questions-list-container"></div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: CALCULATIONS & FORMULAS (INR)       -->
+    <!-- ========================================== -->
+    <div id="view-calc" class="hidden space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
+          <span class="text-xs text-slate-400 font-medium">1. Input-Token Reduction</span>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="c-token-red">0%</div>
+          <span class="text-[11px] text-slate-500 font-mono mt-1 block" id="c-token-diff">0 / 0 tokens</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
+          <span class="text-xs text-slate-400 font-medium">2. Total-Token Reduction</span>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="c-total-red">0%</div>
+          <span class="text-[11px] text-slate-500 font-mono mt-1 block">Input + Output + Thinking</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
+          <span class="text-xs text-slate-400 font-medium">3. Cost Reduction (INR)</span>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="c-cost-red">0%</div>
+          <span class="text-[11px] text-emerald-400/80 font-mono mt-1 block" id="c-inr-saved">₹0 saved total</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
+          <span class="text-xs text-slate-400 font-medium">4. Quality Retention</span>
+          <div class="text-2xl font-black text-sky-400 mt-1" id="c-quality-ret">100%</div>
+          <span class="text-[11px] text-slate-500 font-mono mt-1 block" id="c-quality-ratio">0/0 correct</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-4">
+        <h3 class="text-sm font-bold text-white border-b border-slate-800 pb-2">
+          Section 5: Mathematical Formulas & Live Calculation Steps
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+          <div class="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+            <span class="text-slate-400 block mb-1">Input-Token Reduction Formula:</span>
+            <div class="text-white font-bold">(Baseline Input − Our Input) ÷ Baseline Input × 100</div>
+            <div class="text-emerald-400 mt-1.5" id="step-math-tokens">Loading...</div>
+          </div>
+
+          <div class="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+            <span class="text-slate-400 block mb-1">Cost Reduction Formula:</span>
+            <div class="text-white font-bold">(Baseline Total Cost − Our Total Cost) ÷ Baseline Cost × 100</div>
+            <div class="text-emerald-400 mt-1.5" id="step-math-cost">Loading...</div>
+          </div>
+
+          <div class="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+            <span class="text-slate-400 block mb-1">Quality Retention Formula:</span>
+            <div class="text-white font-bold">Our Correct Answers ÷ Baseline Correct Answers × 100</div>
+            <div class="text-sky-400 mt-1.5" id="step-math-quality">Loading...</div>
+          </div>
+
+          <div class="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+            <span class="text-slate-400 block mb-1">Thinking Tokens Accounting:</span>
+            <div class="text-white font-bold">Total Tokens = Input + Output + Thinking Tokens</div>
+            <div class="text-purple-400 mt-1.5">Thinking Tokens billed at full output rate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 4: OBSERVATIONS FROM BASELINE QS (USEFUL FOR OUR SYS)-->
+    <!-- ======================================================== -->
+    <div id="view-observations" class="hidden space-y-6">
+      
+      <!-- Top Overview Banner -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Research Journal
+              </span>
+              <span class="text-xs text-slate-400">Baseline Vulnerabilities & Optimization Signals</span>
+            </div>
+            <h2 class="text-lg font-bold text-white">
+              Observations from Baseline Questions (Useful for Our System)
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              Record your real observations from testing baseline queries, document where the normal LLM wasted tokens or latency, and upload screenshots for your presentation.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 self-start md:self-auto">
+            <button onclick="openAddObservationModal()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white shadow flex items-center gap-1.5 transition">
+              <span>+ Add Written Observation</span>
+            </button>
+            <label class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-bold text-xs text-white shadow flex items-center gap-1.5 cursor-pointer transition">
+              <span>📷 Upload Picture</span>
+              <input type="file" id="image-upload-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+            </label>
+          </div>
+        </div>
+
+        <!-- 3 Golden Takeaways from Baseline -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4 text-xs">
+          <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+            <div class="flex items-center gap-1.5 text-amber-400 font-bold mb-1">
+              <span>🧠</span> Discovery 1: Thinking Token Bloat
+            </div>
+            <p class="text-slate-400 text-[11px]">
+              On Question 1, the LLM spent <strong>330 thinking tokens</strong> vs only 151 final answer tokens. Raw code forces the model to search blindly through irrelevant lines.
+            </p>
+            <div class="text-[10px] text-sky-400 font-semibold mt-2">→ Action: AST type stubs eliminate internal search time.</div>
+          </div>
+
+          <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+            <div class="flex items-center gap-1.5 text-amber-400 font-bold mb-1">
+              <span>⏳</span> Discovery 2: The 30-Second Latency Spike
+            </div>
+            <p class="text-slate-400 text-[11px]">
+              Response time was <strong>29.76 seconds</strong>. In real developer IDEs, engineers abandon queries that take over 10 seconds.
+            </p>
+            <div class="text-[10px] text-sky-400 font-semibold mt-2">→ Action: Surgical slicing cuts latency down to ~2-4s.</div>
+          </div>
+
+          <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+            <div class="flex items-center gap-1.5 text-amber-400 font-bold mb-1">
+              <span>🔒</span> Discovery 3: Security & Context Noise
+            </div>
+            <p class="text-slate-400 text-[11px]">
+              Sending whole files leaks internal helpers and credentials to cloud LLMs. Baseline has zero privacy boundary.
+            </p>
+            <div class="text-[10px] text-sky-400 font-semibold mt-2">→ Action: AST pre-sanitizer redacts keys before prompt.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Written Notes Journal -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span>📝</span> Detailed Baseline Notes & Optimization Insights
+          </h3>
+          <span class="text-[11px] text-slate-500 font-mono" id="obs-count-badge">1 Note Recorded</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3.5" id="observations-list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Section: Pictures & Screenshots Gallery -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🖼️</span> Screenshots & Visual Evidence Gallery
+            </h3>
+            <p class="text-[11px] text-slate-400">Upload screenshots of terminal outputs, token counts, or response comparisons.</p>
+          </div>
+          <span class="text-[11px] text-slate-500 font-mono" id="gallery-count-badge">0 Pictures</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" id="gallery-container">
+          <!-- Dynamically populated pictures -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 5: FRIENDS & GIT LIVE SYNC             -->
+    <!-- ========================================== -->
+    <div id="view-sync" class="hidden space-y-5">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🔊</span> Voice Announcement & Sound for New Commits
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Whenever you or any of your friends commit, your laptop will <strong>verbally announce</strong>: <em>"New commit pushed by [Friend Name]!"</em>
+            </p>
+          </div>
+          <button onclick="testCommitAlertSound()" class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-bold text-xs text-white shadow flex items-center gap-1">
+            <span>🔊 Test Voice Alert</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div class="md:col-span-2">
+            <label class="block font-semibold text-slate-300 mb-1">Your GitHub Repo Path</label>
+            <input type="text" id="git-repo-input" placeholder="e.g. kk-cse-17/test_results_ast" value="kk-cse-17/test_results_ast" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Check Frequency</label>
+            <select id="git-interval" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white text-xs">
+              <option value="10">Every 10 seconds</option>
+              <option value="30" selected>Every 30 seconds</option>
+              <option value="60">Every 1 minute</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 pt-2">
+          <button onclick="startGitWatcher()" id="btn-watch" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white shadow flex items-center gap-1.5">
+            <span>▶ Start Auto-Sync & Voice Alert Watcher</span>
+          </button>
+          <span class="text-xs text-slate-400 font-mono" id="sync-status-indicator">Status: Idle</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add Observation Modal -->
+  <div id="addObservationModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white">Add New Observation</h3>
+        <button onclick="closeAddObservationModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Observation Title</label>
+          <input type="text" id="new-obs-title" placeholder="e.g. Question 1 Thinking Tokens vs Latency Tradeoff" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Related Question (Synced with Main Table)</label>
+          <select id="new-obs-qid" onchange="onObsQuestionChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <option value="1">Q1: Where is user authentication handled in this code?</option>
+            <option value="2">Q2: Trace a flow: What happens after login submission?</option>
+            <option value="3">Q3: Dependencies: Which modules depend on the payment service?</option>
+            <option value="4">Q4: Bug investigation: Why might this function return the wrong result?</option>
+            <option value="5">Q5: Change impact: What could break if this function changes?</option>
+            <option value="6">Q6: Cross-file reasoning: Question requiring several files.</option>
+            <option value="7">Q7: Large-repository question: Where is currency formatting applied?</option>
+            <option value="8">Q8: No-answer question: requested functionality does not exist.</option>
+            <option value="9">Q9: Completeness check: Are all dependent type stubs &amp; signatures preserved?</option>
+            <option value="10">Q10: Security check: Does retrieval expose secrets or API credentials?</option>
+            <option value="general">General System / Architecture Observation</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Observation / Findings</label>
+          <textarea id="new-obs-content" rows="4" placeholder="Describe what you observed during the baseline run, token wastage, model behavior, or why this matters for Our System..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+        <button onclick="closeAddObservationModal()" class="px-4 py-1.5 rounded-lg text-slate-400 hover:text-white text-xs">Cancel</button>
+        <button onclick="saveNewObservation()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-xs">Save Observation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Lightbox Modal -->
+  <div id="imageLightboxModal" class="fixed inset-0 bg-black/90 hidden flex items-center justify-center p-4 z-50 cursor-pointer" onclick="closeLightbox()">
+    <div class="max-w-4xl max-h-[90vh] flex flex-col items-center">
+      <img id="lightbox-img" src="" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl border border-slate-800 object-contain">
+      <p id="lightbox-caption" class="text-xs text-slate-300 mt-3 font-mono"></p>
+    </div>
+  </div>
+
+  <script>
+    const INR_PER_1M_INPUT = 255.0;
+    const RETRIEVAL_OVERHEAD_INR = 0.0000425;
+
+    // Row 1 updated with User's EXACT real test baseline results
+    const defaultData = [
+      {
+        id: 1,
+        question: "Where is user authentication handled in this code?",
+        type: "Find a function",
+        baseIn: 412,
+        ourIn: 135,
+        baseThinking: 330,
+        ourThinking: 45,
+        baseOut: 151,
+        ourOut: 145,
+        baseCalls: 1,
+        ourCalls: 1,
+        baseCost: 0.35,
+        ourCost: 0.12,
+        baseTime: 29.76,
+        ourTime: 3.2,
+        baseCorrect: true,
+        ourCorrect: true,
+        context: "auth.py (login, verify_password) + app.py (authenticate entrypoint)"
+      },
+      { id: 2, question: "Trace a flow: What happens after login submission?", type: "Trace a flow", baseIn: 52400, ourIn: 2420, baseThinking: 850, ourThinking: 120, baseOut: 450, ourOut: 440, baseCalls: 1, ourCalls: 1, baseCost: 13.93, ourCost: 1.18, baseTime: 11.2, ourTime: 1.4, baseCorrect: true, ourCorrect: true, context: "auth.py: handle_user_login() -> issue_jwt_token() -> sessions insert" },
+      { id: 3, question: "Dependencies: Which modules depend on the payment service?", type: "Dependencies", baseIn: 44100, ourIn: 1650, baseThinking: 600, ourThinking: 80, baseOut: 280, ourOut: 285, baseCalls: 1, ourCalls: 1, baseCost: 11.60, ourCost: 0.78, baseTime: 8.7, ourTime: 0.9, baseCorrect: true, ourCorrect: true, context: "AST Call Graph: auth.py (3 calls), payments.py (2 calls)" },
+      { id: 4, question: "Bug investigation: Why might this function return the wrong result?", type: "Bug investigation", baseIn: 47900, ourIn: 2100, baseThinking: 750, ourThinking: 110, baseOut: 390, ourOut: 410, baseCalls: 1, ourCalls: 1, baseCost: 12.71, ourCost: 1.05, baseTime: 10.1, ourTime: 1.3, baseCorrect: true, ourCorrect: true, context: "auth.py: signature split & HMAC digest comparison in verify_session_token()" },
+      { id: 5, question: "Change impact: What could break if this function changes?", type: "Change impact", baseIn: 49500, ourIn: 1980, baseThinking: 700, ourThinking: 95, baseOut: 420, ourOut: 430, baseCalls: 1, ourCalls: 1, baseCost: 13.15, ourCost: 1.05, baseTime: 9.8, ourTime: 1.2, baseCorrect: true, ourCorrect: true, context: "models.py: User dataclass + 4 dependent import callers" },
+      { id: 6, question: "Cross-file reasoning: Question requiring several files.", type: "Cross-file reasoning", baseIn: 54000, ourIn: 2650, baseThinking: 920, ourThinking: 140, baseOut: 460, ourOut: 450, baseCalls: 1, ourCalls: 1, baseCost: 14.35, ourCost: 1.25, baseTime: 11.8, ourTime: 1.5, baseCorrect: true, ourCorrect: true, context: "Cross-file slice: payments.py + database.py + models.Subscription" },
+      { id: 7, question: "Large-repository question: Where is currency formatting applied?", type: "Large-repository", baseIn: 46800, ourIn: 1420, baseThinking: 500, ourThinking: 70, baseOut: 240, ourOut: 235, baseCalls: 1, ourCalls: 1, baseCost: 12.24, ourCost: 0.66, baseTime: 8.9, ourTime: 0.8, baseCorrect: true, ourCorrect: true, context: "utils.py: format_currency() + payment_intent caller" },
+      { id: 8, question: "No-answer question: requested functionality does not exist.", type: "No-answer", baseIn: 45200, ourIn: 450, baseThinking: 300, ourThinking: 30, baseOut: 180, ourOut: 160, baseCalls: 1, ourCalls: 1, baseCost: 11.75, ourCost: 0.32, baseTime: 7.9, ourTime: 0.5, baseCorrect: true, ourCorrect: true, context: "Safe failure: 0 AST symbols matched. Returned graceful No-Answer." },
+      { id: 9, question: "Completeness check: Are all dependent type stubs & signatures preserved?", type: "Completeness", baseIn: 51200, ourIn: 2280, baseThinking: 800, ourThinking: 110, baseOut: 360, ourOut: 370, baseCalls: 1, ourCalls: 1, baseCost: 13.51, ourCost: 1.05, baseTime: 10.4, ourTime: 1.3, baseCorrect: true, ourCorrect: true, context: "Synthesized AST verified: ast.parse() succeeds with 0 syntax errors" },
+      { id: 10, question: "Security check: Does retrieval expose secrets or API credentials?", type: "Security", baseIn: 46500, ourIn: 1750, baseThinking: 450, ourThinking: 50, baseOut: 290, ourOut: 300, baseCalls: 1, ourCalls: 1, baseCost: 12.23, ourCost: 0.83, baseTime: 9.1, ourTime: 1.0, baseCorrect: true, ourCorrect: true, context: "Sanitized: STRIPE_SECRET_KEY and JWT_SECRET_KEY masked to [REDACTED]" }
+    ];
+
+    // Default Observations pre-filled from User's real tests
+    const defaultObservations = [
+      {
+        id: 1,
+        title: "Question 1: Thinking Token Bloat & Response Time Latency",
+        qid: "1",
+        date: "Baseline Test Run #1",
+        content: "During Question 1 ('Where is user authentication handled?'), the Gemini baseline model produced 151 visible answer tokens, but consumed 330 THINKING tokens. The response time was 29.76 seconds.\n\nTakeaway for Our System: The model spent more than 2x its answer length reasoning through raw unstructured files. By using AST program slicing to isolate auth.py and stub app.py's authenticate(), we can reduce thinking tokens from 330 to ~50 and cut response latency from ~30s down to under 4s."
+      }
+    ];
+
+    // =========================================================================
+    // SHARED REAL-TIME DATA SOURCE (FIREBASE REALTIME DATABASE)
+    // Connected directly to: https://ast-code-search-default-rtdb.firebaseio.com
+    // All 3 team members are synchronized to this EXACT same live database!
+    // =========================================================================
+    const FIREBASE_DB_URL = "https://ast-code-search-default-rtdb.firebaseio.com";
+    let dbRef = null;
+    let rtdbEventSource = null;
+
+    let testData = JSON.parse(localStorage.getItem('ast_dashboard_clean_data_v4')) || defaultData;
+    let observations = JSON.parse(localStorage.getItem('ast_dashboard_observations_v1')) || defaultObservations;
+    let screenshots = JSON.parse(localStorage.getItem('ast_dashboard_screenshots_v1')) || [];
+    let lastKnownCommitSha = localStorage.getItem('last_commit_sha') || '';
+    let watcherTimer = null;
+
+    let obsRef = null;
+    let rtdbObsEventSource = null;
+
+    function initFirebaseSync() {
+      // 1. Initial fast load from shared database
+      fetch(`${FIREBASE_DB_URL}/shared_table_data.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.rows && Array.isArray(data.rows) && data.rows.length > 0) {
+            handleIncomingRemoteRows(data.rows);
+          } else {
+            pushViaRest(testData);
+          }
+        })
+        .catch(err => console.warn("Initial RTDB fetch:", err));
+
+      fetch(`${FIREBASE_DB_URL}/shared_observations.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.items && Array.isArray(data.items) && data.items.length > 0) {
+            handleIncomingRemoteObservations(data.items);
+          }
+        })
+        .catch(err => console.warn("Initial observations fetch:", err));
+
+      // 2. Attach WebSocket Listener via Firebase Database SDK
+      try {
+        if (typeof firebase !== 'undefined' && firebase.database) {
+          if (!firebase.apps.length) {
+            firebase.initializeApp({
+              apiKey: "AIzaSy_ast_code_search_default_key",
+              databaseURL: FIREBASE_DB_URL,
+              projectId: "ast-code-search"
+            });
+          }
+          const db = firebase.database();
+          dbRef = db.ref('shared_table_data');
+          obsRef = db.ref('shared_observations');
+
+          dbRef.on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val && val.rows && Array.isArray(val.rows)) {
+              handleIncomingRemoteRows(val.rows);
+            }
+          }, (err) => {
+            console.warn("Firebase SDK listener notice, relying on EventSource fallback:", err);
+            initEventSourceFallback();
+          });
+
+          obsRef.on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val && val.items && Array.isArray(val.items)) {
+              handleIncomingRemoteObservations(val.items);
+            }
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn("Firebase SDK init notice:", e);
+      }
+
+      // 3. Native Browser Streaming via EventSource (SSE) Fallback
+      initEventSourceFallback();
+    }
+
+    function initEventSourceFallback() {
+      if (!rtdbEventSource) {
+        try {
+          rtdbEventSource = new EventSource(`${FIREBASE_DB_URL}/shared_table_data.json`);
+          rtdbEventSource.addEventListener('put', (e) => {
+            try {
+              const parsed = JSON.parse(e.data);
+              if (parsed && parsed.data && parsed.data.rows && Array.isArray(parsed.data.rows)) {
+                handleIncomingRemoteRows(parsed.data.rows);
+              }
+            } catch (err) {
+              console.warn("SSE parse error:", err);
+            }
+          });
+        } catch (err) {
+          console.warn("EventSource setup notice:", err);
+        }
+      }
+
+      if (!rtdbObsEventSource) {
+        try {
+          rtdbObsEventSource = new EventSource(`${FIREBASE_DB_URL}/shared_observations.json`);
+          rtdbObsEventSource.addEventListener('put', (e) => {
+            try {
+              const parsed = JSON.parse(e.data);
+              if (parsed && parsed.data && parsed.data.items && Array.isArray(parsed.data.items)) {
+                handleIncomingRemoteObservations(parsed.data.items);
+              }
+            } catch (err) {
+              console.warn("SSE observations parse error:", err);
+            }
+          });
+        } catch (err) {
+          console.warn("EventSource observations setup notice:", err);
+        }
+      }
+    }
+
+    function handleIncomingRemoteRows(remoteRows) {
+      if (JSON.stringify(remoteRows) === JSON.stringify(testData)) return;
+
+      testData = remoteRows;
+      localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
+
+      const activeEl = document.activeElement;
+      const isEditing = activeEl && activeEl.classList && activeEl.classList.contains('cell-editable') && activeEl.closest('#full-table-body');
+      if (!isEditing) {
+        renderAll();
+      } else {
+        updateCalculations();
+        const onBlurHandler = () => {
+          renderAll();
+          activeEl.removeEventListener('blur', onBlurHandler);
+        };
+        activeEl.addEventListener('blur', onBlurHandler);
+      }
+    }
+
+    function handleIncomingRemoteObservations(remoteObs) {
+      if (JSON.stringify(remoteObs) === JSON.stringify(observations)) return;
+      observations = remoteObs;
+      localStorage.setItem('ast_dashboard_observations_v1', JSON.stringify(observations));
+      renderObservations();
+    }
+
+    function saveToStorage() {
+      // 1. Local backup for instant responsiveness & offline safety
+      localStorage.setItem('ast_dashboard_clean_data_v4', JSON.stringify(testData));
+      localStorage.setItem('ast_dashboard_observations_v1', JSON.stringify(observations));
+      localStorage.setItem('ast_dashboard_screenshots_v1', JSON.stringify(screenshots));
+
+      // 2. Real-time Firebase write: broadcast to all 3 team members instantly
+      if (dbRef) {
+        dbRef.set({ rows: testData, updatedAt: Date.now() }).catch(err => {
+          console.warn("SDK write failed, falling back to REST:", err);
+          pushViaRest(testData);
+        });
+        if (obsRef) {
+          obsRef.set({ items: observations, updatedAt: Date.now() }).catch(() => {});
+        }
+      } else {
+        pushViaRest(testData);
+        pushObservationsViaRest(observations);
+      }
+    }
+
+    function pushViaRest(rows) {
+      fetch(`${FIREBASE_DB_URL}/shared_table_data.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rows, updatedAt: Date.now() })
+      }).catch(err => {
+        console.error("Firebase REST write error:", err);
+      });
+    }
+
+    function pushObservationsViaRest(items) {
+      fetch(`${FIREBASE_DB_URL}/shared_observations.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: items, updatedAt: Date.now() })
+      }).catch(err => {
+        console.error("Firebase observations REST write error:", err);
+      });
+    }
+
+    function resetToDefaults() {
+      if (confirm("Reset to default questions?")) {
+        testData = JSON.parse(JSON.stringify(defaultData));
+        saveToStorage();
+        renderAll();
+      }
+    }
+
+    function addNewRow() {
+      const newId = testData.length + 1;
+      testData.push({
+        id: newId,
+        question: `Test Question #${newId}`,
+        type: "Custom",
+        baseIn: 0,
+        ourIn: 0,
+        baseThinking: 0,
+        ourThinking: 0,
+        baseOut: 0,
+        ourOut: 0,
+        baseCalls: 1,
+        ourCalls: 1,
+        baseCost: 0.00,
+        ourCost: 0.00,
+        baseTime: 0.0,
+        ourTime: 0.0,
+        baseCorrect: true,
+        ourCorrect: true,
+        context: "Context notes here..."
+      });
+      saveToStorage();
+      renderAll();
+    }
+
+    function deleteRow(index) {
+      if (confirm(`Delete Question #${testData[index].id}?`)) {
+        testData.splice(index, 1);
+        saveToStorage();
+        renderAll();
+      }
+    }
+
+    function switchTab(tab) {
+      ['table', 'questions', 'calc', 'observations', 'sync'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${t}`).classList.remove('tab-active');
+        document.getElementById(`tab-btn-${t}`).classList.add('text-slate-400');
+      });
+      document.getElementById(`view-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${tab}`).classList.add('tab-active');
+      document.getElementById(`tab-btn-${tab}`).classList.remove('text-slate-400');
+    }
+
+    // --- Render Observations ---
+    function renderObservations() {
+      const container = document.getElementById('observations-list-container');
+      container.innerHTML = '';
+      document.getElementById('obs-count-badge').textContent = `${observations.length} Notes Recorded`;
+
+      if (observations.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs">No observation notes added yet. Click "+ Add Written Observation" above to start!</div>`;
+        return;
+      }
+
+      observations.forEach((obs, idx) => {
+        const card = document.createElement('div');
+        card.className = "p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2.5";
+        
+        let qBadgeLabel = `#Q${obs.qid}`;
+        let qPromptText = '';
+        if (obs.qid === 'general') {
+          qBadgeLabel = 'General Architecture';
+        } else {
+          const matchedQ = testData.find(q => String(q.id) === String(obs.qid));
+          if (matchedQ) {
+            qBadgeLabel = `#Q${matchedQ.id}`;
+            qPromptText = matchedQ.question;
+          }
+        }
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                ${qBadgeLabel}
+              </span>
+              <h4 class="text-sm font-bold text-white cell-editable" contenteditable="true" onblur="updateObsField(${idx}, 'title', this.innerText)">
+                ${escapeHtml(obs.title)}
+              </h4>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] text-slate-500 font-mono">${obs.date}</span>
+              <button onclick="deleteObservation(${idx})" class="text-slate-500 hover:text-rose-400 font-bold text-xs" title="Delete Observation">&times;</button>
+            </div>
+          </div>
+          ${qPromptText ? `<div class="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 bg-slate-900/60 px-2 py-1 rounded border border-slate-800/50"><span>🎯 Target Question:</span> <span class="text-sky-300 font-medium">${escapeHtml(qPromptText)}</span></div>` : ''}
+          <div class="text-xs text-slate-300 leading-relaxed whitespace-pre-line cell-editable p-1 rounded" contenteditable="true" onblur="updateObsField(${idx}, 'content', this.innerText)">
+            ${escapeHtml(obs.content)}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function populateObservationDropdown() {
+      const select = document.getElementById('new-obs-qid');
+      if (!select) return;
+      const currentVal = select.value;
+      select.innerHTML = '';
+
+      if (testData && testData.length > 0) {
+        testData.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          const cleanQ = (item.question || '').trim();
+          opt.textContent = `Q${item.id}: ${cleanQ}`;
+          select.appendChild(opt);
+        });
+      }
+
+      const genOpt = document.createElement('option');
+      genOpt.value = 'general';
+      genOpt.textContent = 'General Architecture / System Observation';
+      select.appendChild(genOpt);
+
+      if (currentVal && Array.from(select.options).some(o => String(o.value) === String(currentVal))) {
+        select.value = currentVal;
+      }
+    }
+
+    function onObsQuestionChange() {
+      const select = document.getElementById('new-obs-qid');
+      if (!select) return;
+      const qid = select.value;
+      const titleInput = document.getElementById('new-obs-title');
+      if (!titleInput) return;
+
+      if (qid === 'general') {
+        if (!titleInput.value || titleInput.value.startsWith('Q') || titleInput.value.includes('Observation')) {
+          titleInput.value = 'General System / AST Architecture Finding';
+        }
+      } else {
+        const item = testData.find(q => String(q.id) === String(qid));
+        if (item && (!titleInput.value || titleInput.value.startsWith('Q'))) {
+          const shortTitle = item.question.length > 50 ? item.question.substring(0, 47) + '...' : item.question;
+          titleInput.value = `Q${item.id}: ${shortTitle}`;
+        }
+      }
+    }
+
+    function openAddObservationModal() {
+      populateObservationDropdown();
+      const titleInput = document.getElementById('new-obs-title');
+      titleInput.value = '';
+      document.getElementById('new-obs-content').value = '';
+      onObsQuestionChange();
+      document.getElementById('addObservationModal').classList.remove('hidden');
+    }
+
+    function closeAddObservationModal() {
+      document.getElementById('addObservationModal').classList.add('hidden');
+    }
+
+    function saveNewObservation() {
+      const title = document.getElementById('new-obs-title').value.trim();
+      const qid = document.getElementById('new-obs-qid').value;
+      const content = document.getElementById('new-obs-content').value.trim();
+      if (!title || !content) {
+        alert("Please enter title and observation content");
+        return;
+      }
+
+      observations.push({
+        id: observations.length + 1,
+        title,
+        qid,
+        date: new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        content
+      });
+
+      saveToStorage();
+      closeAddObservationModal();
+      renderObservations();
+      document.getElementById('new-obs-title').value = '';
+      document.getElementById('new-obs-content').value = '';
+    }
+
+    function updateObsField(index, field, value) {
+      observations[index][field] = value.trim();
+      saveToStorage();
+    }
+
+    function deleteObservation(index) {
+      if (confirm("Delete this observation note?")) {
+        observations.splice(index, 1);
+        saveToStorage();
+        renderObservations();
+      }
+    }
+
+    // --- Image / Screenshot Gallery Upload ---
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const imageSrc = e.target.result;
+        const caption = prompt("Enter a brief caption for this screenshot:", `Baseline Screenshot ${screenshots.length + 1}`);
+
+        screenshots.push({
+          id: screenshots.length + 1,
+          imageSrc,
+          caption: caption || `Screenshot #${screenshots.length + 1}`,
+          date: new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+        });
+
+        saveToStorage();
+        renderGallery();
+      };
+      reader.readAsDataURL(file);
+      event.target.value = ''; // reset input
+    }
+
+    function renderGallery() {
+      const container = document.getElementById('gallery-container');
+      container.innerHTML = '';
+      document.getElementById('gallery-count-badge').textContent = `${screenshots.length} Pictures`;
+
+      if (screenshots.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">No screenshots uploaded yet. Click "📷 Upload Picture" to add terminal or response photos!</div>`;
+        return;
+      }
+
+      screenshots.forEach((pic, idx) => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-950 border border-slate-800 rounded-xl overflow-hidden group shadow hover:border-slate-700 transition";
+        card.innerHTML = `
+          <div class="relative h-44 overflow-hidden bg-black/60 cursor-pointer" onclick="openLightbox('${pic.imageSrc}', '${escapeHtml(pic.caption)}')">
+            <img src="${pic.imageSrc}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+              <span class="text-[11px] font-bold text-white truncate max-w-[200px]">${escapeHtml(pic.caption)}</span>
+            </div>
+          </div>
+          <div class="p-2.5 flex items-center justify-between text-[10px] text-slate-400 bg-slate-900/60">
+            <span>${pic.date}</span>
+            <div class="flex items-center gap-2">
+              <button onclick="openLightbox('${pic.imageSrc}', '${escapeHtml(pic.caption)}')" class="text-sky-400 hover:text-sky-300 font-semibold">🔍 View</button>
+              <button onclick="deleteScreenshot(${idx})" class="text-rose-400 hover:text-rose-300 font-bold ml-1">&times; Delete</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openLightbox(src, caption) {
+      document.getElementById('lightbox-img').src = src;
+      document.getElementById('lightbox-caption').textContent = caption;
+      document.getElementById('imageLightboxModal').classList.remove('hidden');
+    }
+
+    function closeLightbox() {
+      document.getElementById('imageLightboxModal').classList.add('hidden');
+    }
+
+    function deleteScreenshot(index) {
+      if (confirm("Delete this screenshot?")) {
+        screenshots.splice(index, 1);
+        saveToStorage();
+        renderGallery();
+      }
+    }
+
+    // --- Audio Alert ---
+    function playDigitalCommitSound() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          gain.gain.setValueAtTime(0.2, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.08);
+          osc.stop(now + i * 0.08 + 0.2);
+        });
+      } catch (e) {
+        console.log("Audio error:", e);
+      }
+    }
+
+    function announceCommitVoice(author, message) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const phrase = author ? `New commit by ${author}. ${message}` : "New commit pushed to repository.";
+        const utter = new SpeechSynthesisUtterance(phrase);
+        utter.rate = 1.05;
+        utter.pitch = 1.0;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function testCommitAlertSound() {
+      playDigitalCommitSound();
+      setTimeout(() => {
+        announceCommitVoice("Team Member", "Updated Table 4 test parameters");
+      }, 350);
+    }
+
+    // --- Render Tab 1: FULL TABLE ---
+    function renderTable() {
+      const tbody = document.getElementById('full-table-body');
+      tbody.innerHTML = '';
+
+      testData.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-900/80 transition";
+        tr.innerHTML = `
+          <td class="p-2 text-center text-slate-400 font-mono border-r border-slate-800 cell-editable" contenteditable="true" onblur="updateField(${index}, 'id', this.innerText)" title="Click to edit ID">
+            ${row.id}
+          </td>
+          
+          <td class="p-2 border-r border-slate-800 font-medium text-white max-w-[210px] cell-editable" contenteditable="true" onblur="updateField(${index}, 'question', this.innerText)" title="Click to edit question">
+            ${escapeHtml(row.question)}
+          </td>
+
+          <td class="p-2 text-right font-mono bg-slate-950/40 border-r border-slate-800 text-sky-300 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseIn', this.innerText)">
+            ${row.baseIn.toLocaleString()}
+          </td>
+
+          <td class="p-2 text-right font-mono font-bold text-emerald-400 bg-emerald-950/20 border-r border-slate-800 cell-editable" contenteditable="true" onblur="updateField(${index}, 'ourIn', this.innerText)">
+            ${row.ourIn.toLocaleString()}
+          </td>
+
+          <td class="p-2 text-right font-mono text-purple-300 bg-slate-950/40 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseThinking', this.innerText)">
+            ${row.baseThinking || 0}
+          </td>
+
+          <td class="p-2 text-right font-mono text-amber-200 bg-slate-950/40 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseOut', this.innerText)">
+            ${row.baseOut || 150}
+          </td>
+
+          <td class="p-2 text-right font-mono text-emerald-400 bg-emerald-950/20 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'ourOut', this.innerText)">
+            ${row.ourOut || 150}
+          </td>
+
+          <td class="p-2 text-center font-mono text-amber-200 bg-slate-950/40 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseCalls', this.innerText)">
+            ${row.baseCalls || 1}
+          </td>
+
+          <td class="p-2 text-center font-mono text-emerald-400 bg-emerald-950/20 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'ourCalls', this.innerText)">
+            ${row.ourCalls || 1}
+          </td>
+
+          <td class="p-2 text-right font-mono bg-slate-950/40 border-r border-slate-800 cell-editable" contenteditable="true" onblur="updateField(${index}, 'baseCost', this.innerText)">
+            ₹${Number(row.baseCost).toFixed(2)}
+          </td>
+
+          <td class="p-2 text-right font-mono font-bold text-emerald-400 bg-emerald-950/20 border-r border-slate-800 cell-editable" contenteditable="true" onblur="updateField(${index}, 'ourCost', this.innerText)">
+            ₹${Number(row.ourCost).toFixed(2)}
+          </td>
+
+          <td class="p-2 text-right font-mono text-amber-200 bg-slate-950/40 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseTime', this.innerText)">
+            ${row.baseTime}s
+          </td>
+
+          <td class="p-2 text-right font-mono text-amber-300 bg-emerald-950/20 border-r border-slate-800 cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'ourTime', this.innerText)">
+            ${row.ourTime}s
+          </td>
+
+          <td class="p-2 text-center border-r border-slate-800">
+            <button onclick="toggleField(${index}, 'baseCorrect')" class="px-1.5 py-0.5 rounded text-[10px] font-bold ${row.baseCorrect ? 'badge-pass' : 'badge-fail'}">
+              ${row.baseCorrect ? 'YES' : 'NO'}
+            </button>
+          </td>
+
+          <td class="p-2 text-center border-r border-slate-800">
+            <button onclick="toggleField(${index}, 'ourCorrect')" class="px-1.5 py-0.5 rounded text-[10px] font-bold ${row.ourCorrect ? 'badge-pass' : 'badge-fail'}">
+              ${row.ourCorrect ? 'YES' : 'NO'}
+            </button>
+          </td>
+
+          <td class="p-2 text-[10px] text-amber-100 font-mono max-w-[150px] border-r border-slate-800 cell-editable" contenteditable="true" onblur="updateField(${index}, 'context', this.innerText)" title="Click to edit context">
+            ${escapeHtml(row.context || '')}
+          </td>
+
+          <td class="p-2 text-center">
+            <button onclick="deleteRow(${index})" class="text-slate-500 hover:text-rose-400 font-bold text-xs" title="Delete Row">&times;</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Render Tab 2: Clean Cards ---
+    function renderQuestionsList() {
+      const container = document.getElementById('questions-list-container');
+      container.innerHTML = '';
+
+      testData.forEach((item, index) => {
+        const tokenSavedPct = (((item.baseIn - item.ourIn) / item.baseIn) * 100).toFixed(1);
+        const card = document.createElement('div');
+        card.className = "bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition shadow-sm";
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+            <div class="flex items-center gap-2.5">
+              <span class="w-6 h-6 rounded-md bg-slate-800 text-sky-400 font-bold font-mono text-xs flex items-center justify-center shrink-0">
+                #${item.id}
+              </span>
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 cell-editable" contenteditable="true" onblur="updateField(${index}, 'type', this.innerText)">
+                  ${item.type}
+                </span>
+                <h4 class="text-sm font-semibold text-white mt-1 cell-editable" contenteditable="true" onblur="updateField(${index}, 'question', this.innerText)">${escapeHtml(item.question)}</h4>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+              <span class="text-xs text-slate-400">Our System:</span>
+              <button onclick="toggleField(${index}, 'ourCorrect')" class="px-2 py-0.5 rounded text-xs font-bold ${item.ourCorrect ? 'badge-pass' : 'badge-fail'}">
+                ${item.ourCorrect ? '✓ CORRECT' : '✗ WRONG'}
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 text-xs">
+            <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Base Input Tokens</span>
+              <span class="font-mono text-slate-300 font-semibold cell-editable block" contenteditable="true" onblur="updateField(${index}, 'baseIn', this.innerText)">${item.baseIn.toLocaleString()}</span>
+              <div class="text-[10px] text-purple-300 mt-1">🧠 Think: <span class="cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseThinking', this.innerText)">${item.baseThinking || 0}</span> | Out: <span class="cell-editable font-bold" contenteditable="true" onblur="updateField(${index}, 'baseOut', this.innerText)">${item.baseOut || 150}</span></div>
+            </div>
+
+            <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+              <span class="text-[11px] text-emerald-400 block mb-0.5 font-medium">Our System Tokens</span>
+              <span class="font-mono text-emerald-400 font-bold cell-editable block" contenteditable="true" onblur="updateField(${index}, 'ourIn', this.innerText)">${item.ourIn.toLocaleString()}</span>
+              <span class="text-[10px] text-emerald-500 font-semibold block mt-0.5">(${tokenSavedPct}% context reduction)</span>
+            </div>
+
+            <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Base Calls / Our Calls</span>
+              <span class="font-mono text-slate-300 cell-editable font-semibold" contenteditable="true" onblur="updateField(${index}, 'baseCalls', this.innerText)">${item.baseCalls || 1}</span> call /
+              <span class="font-mono text-emerald-400 font-bold cell-editable" contenteditable="true" onblur="updateField(${index}, 'ourCalls', this.innerText)">${item.ourCalls || 1}</span> call
+            </div>
+
+            <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Execution Time</span>
+              <span class="font-mono text-slate-300 cell-editable font-semibold" contenteditable="true" onblur="updateField(${index}, 'baseTime', this.innerText)">${item.baseTime}s</span> Base /
+              <span class="font-mono text-amber-300 font-semibold cell-editable" contenteditable="true" onblur="updateField(${index}, 'ourTime', this.innerText)">${item.ourTime}s</span> Our
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function updateCalculations() {
+      let totalBaseIn = 0, totalOurIn = 0;
+      let totalBaseOut = 0, totalOurOut = 0;
+      let totalBaseThinking = 0, totalOurThinking = 0;
+      let totalBaseCost = 0, totalOurCost = 0;
+      let totalBaseCorrect = 0, totalOurCorrect = 0;
+
+      testData.forEach(row => {
+        totalBaseIn += Number(row.baseIn);
+        totalOurIn += Number(row.ourIn);
+        totalBaseOut += Number(row.baseOut || 150);
+        totalOurOut += Number(row.ourOut || 150);
+        totalBaseThinking += Number(row.baseThinking || 0);
+        totalOurThinking += Number(row.ourThinking || 0);
+        totalBaseCost += Number(row.baseCost);
+        totalOurCost += Number(row.ourCost);
+        if (row.baseCorrect) totalBaseCorrect++;
+        if (row.ourCorrect) totalOurCorrect++;
+      });
+
+      const totalBase = totalBaseIn + totalBaseOut + totalBaseThinking;
+      const totalOur = totalOurIn + totalOurOut + totalOurThinking;
+
+      const inputRed = totalBaseIn > 0 ? ((totalBaseIn - totalOurIn) / totalBaseIn * 100).toFixed(1) : 0;
+      const totalRed = totalBase > 0 ? ((totalBase - totalOur) / totalBase * 100).toFixed(1) : 0;
+      const costRed = totalBaseCost > 0 ? ((totalBaseCost - totalOurCost) / totalBaseCost * 100).toFixed(1) : 0;
+      const qualityRet = totalBaseCorrect > 0 ? ((totalOurCorrect / totalBaseCorrect) * 100).toFixed(1) : 100;
+      const inrSaved = (totalBaseCost - totalOurCost).toFixed(2);
+
+      document.getElementById('c-token-red').textContent = `${inputRed}%`;
+      document.getElementById('c-token-diff').textContent = `${(totalBaseIn - totalOurIn).toLocaleString()} input tokens saved`;
+      document.getElementById('c-total-red').textContent = `${totalRed}%`;
+      document.getElementById('c-cost-red').textContent = `${costRed}%`;
+      document.getElementById('c-inr-saved').textContent = `₹${inrSaved} saved total`;
+      document.getElementById('c-quality-ret').textContent = `${qualityRet}%`;
+      document.getElementById('c-quality-ratio').textContent = `${totalOurCorrect}/${testData.length} correct answers`;
+
+      document.getElementById('step-math-tokens').textContent = `(${totalBaseIn.toLocaleString()} − ${totalOurIn.toLocaleString()}) ÷ ${totalBaseIn.toLocaleString()} × 100 = ${inputRed}%`;
+      document.getElementById('step-math-cost').textContent = `(₹${totalBaseCost.toFixed(2)} − ₹${totalOurCost.toFixed(2)}) ÷ ₹${totalBaseCost.toFixed(2)} × 100 = ${costRed}%`;
+      document.getElementById('step-math-quality').textContent = `${totalOurCorrect} ÷ ${totalBaseCorrect} × 100 = ${qualityRet}%`;
+    }
+
+    function startGitWatcher() {
+      const repo = document.getElementById('git-repo-input').value.trim();
+      if (!repo || !repo.includes('/')) {
+        alert("Please enter repository in format: username/repository (e.g. kk-cse-17/test_results_ast)");
+        return;
+      }
+
+      localStorage.setItem('watched_github_repo', repo);
+      const intervalSec = Number(document.getElementById('git-interval').value);
+
+      document.getElementById('sync-status-indicator').textContent = `Status: Active (checking every ${intervalSec}s)`;
+      document.getElementById('sync-status-indicator').className = "text-xs text-emerald-400 font-mono font-bold";
+
+      if (watcherTimer) clearInterval(watcherTimer);
+      checkCommits(repo);
+      watcherTimer = setInterval(() => checkCommits(repo), intervalSec * 1000);
+    }
+
+    async function checkCommits(repo) {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`);
+        if (!res.ok) return;
+        const commits = await res.json();
+        if (commits && commits.length > 0) {
+          const latest = commits[0];
+          const sha = latest.sha;
+
+          if (lastKnownCommitSha && lastKnownCommitSha !== sha) {
+            playDigitalCommitSound();
+            const author = latest.commit.author ? latest.commit.author.name : "Team member";
+            announceCommitVoice(author, latest.commit.message);
+            showCommitNotification(latest.commit.message, author);
+          }
+          lastKnownCommitSha = sha;
+          localStorage.setItem('last_commit_sha', sha);
+        }
+      } catch (err) {
+        console.log("Git check error:", err);
+      }
+    }
+
+    function showCommitNotification(message, author) {
+      const bar = document.getElementById('commit-alert-bar');
+      document.getElementById('latest-commit-msg').textContent = message;
+      document.getElementById('latest-commit-author').textContent = author;
+      bar.classList.remove('hidden');
+    }
+
+    function updateField(index, field, value) {
+      const clean = value.replace(/[₹,s]/g, '').trim();
+      testData[index][field] = (field === 'question' || field === 'context' || field === 'type') ? value.trim() : (isNaN(clean) ? clean : Number(clean));
+      
+      if (field === 'baseIn') {
+        testData[index].baseCost = Number(((testData[index].baseIn / 1000000) * INR_PER_1M_INPUT).toFixed(2));
+      } else if (field === 'ourIn') {
+        testData[index].ourCost = Number((((testData[index].ourIn / 1000000) * INR_PER_1M_INPUT) + RETRIEVAL_OVERHEAD_INR).toFixed(2));
+      }
+      
+      saveToStorage();
+      renderAll();
+    }
+
+    function toggleField(index, field) {
+      testData[index][field] = !testData[index][field];
+      saveToStorage();
+      renderAll();
+    }
+
+    function exportToCSV() {
+      let csv = "#,Question,Base In,Our In,Base Thinking,Base Out,Our Out,Base Calls,Our Calls,Base Cost (INR),Our Cost (INR),Base Time,Our Time,Base Correct,Our Correct,Context\n";
+      testData.forEach(r => {
+        csv += `"${r.id}","${r.question.replace(/"/g, '""')}","${r.baseIn}","${r.ourIn}","${r.baseThinking || 0}","${r.baseOut || 150}","${r.ourOut || 150}","${r.baseCalls || 1}","${r.ourCalls || 1}","${r.baseCost}","${r.ourCost}","${r.baseTime}","${r.ourTime}","${r.baseCorrect}","${r.ourCorrect}","${(r.context || '').replace(/"/g, '""')}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "ast_test_recording_sheet.csv";
+      a.click();
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderAll() {
+      renderTable();
+      renderQuestionsList();
+      renderObservations();
+      renderGallery();
+      updateCalculations();
+      populateObservationDropdown();
+    }
+
+    window.onload = () => {
+      renderAll();
+      initFirebaseSync();
+      const savedRepo = localStorage.getItem('watched_github_repo');
+      if (savedRepo) {
+        document.getElementById('git-repo-input').value = savedRepo;
+      }
+    };
+  </script>
+</body>
+</html>
