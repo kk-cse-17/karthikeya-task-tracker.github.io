@@ -1331,6 +1331,32 @@
       }
     }
 
+    function stopUserUploadedBeep() {
+      if (userBeepAudio) {
+        try {
+          const startVol = userBeepAudio.volume;
+          let step = 0;
+          const fade = setInterval(() => {
+            step++;
+            if (userBeepAudio) {
+              userBeepAudio.volume = Math.max(0, startVol * (1 - step / 5));
+            }
+            if (step >= 5) {
+              clearInterval(fade);
+              if (userBeepAudio) {
+                userBeepAudio.pause();
+                userBeepAudio.currentTime = 0;
+                userBeepAudio.volume = 0.45;
+              }
+            }
+          }, 35);
+        } catch (e) {
+          userBeepAudio.pause();
+          userBeepAudio.currentTime = 0;
+        }
+      }
+    }
+
     function announceSystemVoiceAlert(text) {
       if ('speechSynthesis' in window) {
         try {
@@ -1342,10 +1368,29 @@
           const voices = window.speechSynthesis.getVoices();
           const engVoice = voices.find(v => (v.lang && v.lang.startsWith('en')) || (v.name && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft'))));
           if (engVoice) utter.voice = engVoice;
+
+          // Stop the background beep as soon as the system voice completes speaking!
+          utter.onend = function() {
+            stopUserUploadedBeep();
+          };
+          utter.onerror = function() {
+            stopUserUploadedBeep();
+          };
+
           window.speechSynthesis.speak(utter);
+
+          // Safety timeout: voice message takes ~3.4s, ensure beep stops when voice completes
+          setTimeout(() => {
+            stopUserUploadedBeep();
+          }, 3600);
         } catch (e) {
           console.warn("Speech error:", e);
+          stopUserUploadedBeep();
         }
+      } else {
+        setTimeout(() => {
+          stopUserUploadedBeep();
+        }, 3400);
       }
     }
 
@@ -1434,7 +1479,7 @@
         const audio = initUserBeepAudio();
         if (audio) {
           audio.currentTime = 0;
-          audio.volume = 0.65; // Balanced background level so the voice is clearly heard
+          audio.volume = 0.45; // Gently reduced volume as requested (subtle background level)
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise.catch(err => {
