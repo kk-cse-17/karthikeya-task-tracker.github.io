@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <!-- User Custom Alert Beep Audio -->
-  <script src="alert_sound_data.js"></script>
+  <script src="alert_sound_data.js?v=2"></script>
   <style>
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
@@ -1217,7 +1217,7 @@
     function initUserBeepAudio() {
       if (!userBeepAudio) {
         try {
-          const src = (typeof USER_BEEP_DATA_URI !== 'undefined' && USER_BEEP_DATA_URI) ? USER_BEEP_DATA_URI : 'alert_beep.mp3';
+          const src = (typeof USER_BEEP_DATA_URI !== 'undefined' && USER_BEEP_DATA_URI) ? USER_BEEP_DATA_URI : 'alert_beep.mp3?v=2';
           userBeepAudio = new Audio(src);
           userBeepAudio.load();
         } catch (e) {
@@ -1337,7 +1337,7 @@
           userBeepAudio.loop = false;
           userBeepAudio.pause();
           userBeepAudio.currentTime = 0;
-          userBeepAudio.volume = 0.32;
+          userBeepAudio.volume = 0.35;
         } catch (e) {
           try {
             userBeepAudio.pause();
@@ -1575,8 +1575,8 @@
         const audio = initUserBeepAudio();
         if (audio) {
           audio.currentTime = 0;
-          audio.loop = true; // Continuous loop so beep plays for entire duration of the speech!
-          audio.volume = 0.32; // Gently reduced volume as requested (subtle background siren level)
+          audio.loop = true; // Continuous loop so siren plays for entire duration of the speech!
+          audio.volume = 0.35; // Audible siren level that sits cleanly behind the voice
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise.catch(err => {
