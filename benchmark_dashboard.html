@@ -1360,8 +1360,8 @@
       window.speechSynthesis.onvoiceschanged = () => { loadVoices(); };
     }
 
-    // Specifically find and select a MAN'S VOICE across Android, iOS, Windows & Mac
-    function getMaleVoice() {
+    // Select a pleasant, high quality natural system voice across mobile and desktop
+    function getNiceSystemVoice() {
       if (!('speechSynthesis' in window)) return null;
       let voices = loadVoices();
       if (!voices || !voices.length) {
@@ -1369,21 +1369,17 @@
       }
       if (!voices || !voices.length) return null;
 
-      // Filter to English voices first
+      // Filter to English voices
       const enVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
       const pool = enVoices.length ? enVoices : voices;
 
-      // Priority 1: Check both name and voiceURI for male indicators (Android often puts 'male' or 'iom' in voiceURI!)
-      const maleKeywords = [
-        'male', 'david', 'mark', 'daniel', 'alex', 'guy', 'george', 
-        'aaron', 'fred', 'rishi', 'arthur', 'gordon', 'james', 'john', 
-        'tom', 'charles', 'oliver', 'richard', 'thomas', 'edward', 
-        'en-us-x-iol', 'en-us-x-iom', 'en-gb-x-rjs', 'en-in-x-cfl', 
-        'en-au-x-afh', 'en-in-x-ahp', 'en-gb-x-fis', 'en-us-x-tpd',
-        'microsoft david', 'microsoft mark'
+      // Prefer top-quality, natural/enhanced English voices
+      const preferredKeywords = [
+        'natural', 'google', 'microsoft', 'enhanced', 'siri', 
+        'david', 'mark', 'daniel', 'samantha', 'karen', 'george'
       ];
 
-      for (const kw of maleKeywords) {
+      for (const kw of preferredKeywords) {
         const found = pool.find(v => {
           const name = (v.name || '').toLowerCase();
           const uri = (v.voiceURI || '').toLowerCase();
@@ -1392,21 +1388,8 @@
         if (found) return found;
       }
 
-      // Priority 2: Exclude known female voices from name and voiceURI
-      const femaleKeywords = [
-        'female', 'zira', 'samantha', 'victoria', 'karen', 'susan', 
-        'hazel', 'catherine', 'fiona', 'helena', 'veena', 'tessa', 
-        'moira', 'nicky', 'ava', 'allison', 'kathy', 'princess', 
-        'vicki', 'kate', 'serena', 'stephanie', 'en-us-x-sfg', 
-        'en-us-x-tpc', 'en-gb-x-rfd'
-      ];
-
-      const nonFemaleVoice = pool.find(v => {
-        const name = (v.name || '').toLowerCase();
-        const uri = (v.voiceURI || '').toLowerCase();
-        return !femaleKeywords.some(fk => name.includes(fk) || uri.includes(fk));
-      });
-      if (nonFemaleVoice) return nonFemaleVoice;
+      const defaultVoice = pool.find(v => v.default);
+      if (defaultVoice) return defaultVoice;
 
       return pool[0] || voices[0];
     }
@@ -1432,12 +1415,14 @@
         const utter = new SpeechSynthesisUtterance(text);
         currentSpeechUtterance = utter; // Prevent GC on mobile Chrome!
 
-        utter.rate = 0.95; // Steady, crisp pace
-        utter.pitch = 0.70; // Masculine baritone pitch (0.70) ensures an authoritative man's voice across Android, iPhone and PC!
+        // Natural, clear speaking rate and pitch - exactly like previous version on laptop,
+        // and crisp, natural and pleasant on mobile!
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
         utter.volume = 1.0;
 
-        const maleVoice = getMaleVoice();
-        if (maleVoice) utter.voice = maleVoice;
+        const bestVoice = getNiceSystemVoice();
+        if (bestVoice) utter.voice = bestVoice;
 
         let beepStarted = false;
         const startBeepSync = () => {
@@ -1600,7 +1585,7 @@
     }
 
     function triggerSystemChangeAlert(message) {
-      // Announce with man's voice and perfectly synchronized background beep
+      // Announce with pleasant natural voice and perfectly synchronized background beep
       announceSystemVoiceAlert(message);
       // Visual top notification banner
       showSystemAlertNotification(message);
