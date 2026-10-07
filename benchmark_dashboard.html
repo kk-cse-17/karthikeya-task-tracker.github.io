@@ -1334,63 +1334,165 @@
     function stopUserUploadedBeep() {
       if (userBeepAudio) {
         try {
-          const startVol = userBeepAudio.volume;
-          let step = 0;
-          const fade = setInterval(() => {
-            step++;
-            if (userBeepAudio) {
-              userBeepAudio.volume = Math.max(0, startVol * (1 - step / 5));
-            }
-            if (step >= 5) {
-              clearInterval(fade);
-              if (userBeepAudio) {
-                userBeepAudio.pause();
-                userBeepAudio.currentTime = 0;
-                userBeepAudio.volume = 0.45;
-              }
-            }
-          }, 35);
-        } catch (e) {
+          userBeepAudio.loop = false;
           userBeepAudio.pause();
           userBeepAudio.currentTime = 0;
+          userBeepAudio.volume = 0.32;
+        } catch (e) {
+          try {
+            userBeepAudio.pause();
+            userBeepAudio.currentTime = 0;
+          } catch (err) {}
         }
       }
     }
 
+    let cachedVoices = [];
+    function loadVoices() {
+      if (!('speechSynthesis' in window)) return [];
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length) cachedVoices = v;
+      return cachedVoices;
+    }
+
+    if ('speechSynthesis' in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = () => { loadVoices(); };
+    }
+
+    // Specifically find and select a MAN'S VOICE across Android, iOS, Windows & Mac
+    function getMaleVoice() {
+      if (!('speechSynthesis' in window)) return null;
+      let voices = loadVoices();
+      if (!voices || !voices.length) {
+        voices = window.speechSynthesis.getVoices();
+      }
+      if (!voices || !voices.length) return null;
+
+      // Filter to English voices first
+      const enVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
+      const pool = enVoices.length ? enVoices : voices;
+
+      // Priority 1: Check both name and voiceURI for male indicators (Android often puts 'male' or 'iom' in voiceURI!)
+      const maleKeywords = [
+        'male', 'david', 'mark', 'daniel', 'alex', 'guy', 'george', 
+        'aaron', 'fred', 'rishi', 'arthur', 'gordon', 'james', 'john', 
+        'tom', 'charles', 'oliver', 'richard', 'thomas', 'edward', 
+        'en-us-x-iol', 'en-us-x-iom', 'en-gb-x-rjs', 'en-in-x-cfl', 
+        'en-au-x-afh', 'en-in-x-ahp', 'en-gb-x-fis', 'en-us-x-tpd',
+        'microsoft david', 'microsoft mark'
+      ];
+
+      for (const kw of maleKeywords) {
+        const found = pool.find(v => {
+          const name = (v.name || '').toLowerCase();
+          const uri = (v.voiceURI || '').toLowerCase();
+          return name.includes(kw) || uri.includes(kw);
+        });
+        if (found) return found;
+      }
+
+      // Priority 2: Exclude known female voices from name and voiceURI
+      const femaleKeywords = [
+        'female', 'zira', 'samantha', 'victoria', 'karen', 'susan', 
+        'hazel', 'catherine', 'fiona', 'helena', 'veena', 'tessa', 
+        'moira', 'nicky', 'ava', 'allison', 'kathy', 'princess', 
+        'vicki', 'kate', 'serena', 'stephanie', 'en-us-x-sfg', 
+        'en-us-x-tpc', 'en-gb-x-rfd'
+      ];
+
+      const nonFemaleVoice = pool.find(v => {
+        const name = (v.name || '').toLowerCase();
+        const uri = (v.voiceURI || '').toLowerCase();
+        return !femaleKeywords.some(fk => name.includes(fk) || uri.includes(fk));
+      });
+      if (nonFemaleVoice) return nonFemaleVoice;
+
+      return pool[0] || voices[0];
+    }
+
+    let currentSpeechUtterance = null; // Stored globally to prevent Android garbage collection
+    let speechCheckTimer = null;
+
     function announceSystemVoiceAlert(text) {
-      if ('speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-          const utter = new SpeechSynthesisUtterance(text);
-          utter.rate = 1.0;
-          utter.pitch = 1.05;
-          utter.volume = 1.0;
-          const voices = window.speechSynthesis.getVoices();
-          const engVoice = voices.find(v => (v.lang && v.lang.startsWith('en')) || (v.name && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft'))));
-          if (engVoice) utter.voice = engVoice;
+      if (!('speechSynthesis' in window)) {
+        playUserUploadedBeep();
+        setTimeout(() => stopUserUploadedBeep(), 4000);
+        return;
+      }
 
-          // Stop the background beep as soon as the system voice completes speaking!
-          utter.onend = function() {
-            stopUserUploadedBeep();
-          };
-          utter.onerror = function() {
-            stopUserUploadedBeep();
-          };
-
-          window.speechSynthesis.speak(utter);
-
-          // Safety timeout: voice message takes ~3.4s, ensure beep stops when voice completes
-          setTimeout(() => {
-            stopUserUploadedBeep();
-          }, 3600);
-        } catch (e) {
-          console.warn("Speech error:", e);
-          stopUserUploadedBeep();
+      try {
+        window.speechSynthesis.cancel();
+        stopUserUploadedBeep();
+        if (speechCheckTimer) {
+          clearInterval(speechCheckTimer);
+          speechCheckTimer = null;
         }
-      } else {
-        setTimeout(() => {
+
+        const utter = new SpeechSynthesisUtterance(text);
+        currentSpeechUtterance = utter; // Prevent GC on mobile Chrome!
+
+        utter.rate = 0.95; // Steady, crisp pace
+        utter.pitch = 0.70; // Masculine baritone pitch (0.70) ensures an authoritative man's voice across Android, iPhone and PC!
+        utter.volume = 1.0;
+
+        const maleVoice = getMaleVoice();
+        if (maleVoice) utter.voice = maleVoice;
+
+        let beepStarted = false;
+        const startBeepSync = () => {
+          if (!beepStarted) {
+            beepStarted = true;
+            playUserUploadedBeep();
+          }
+        };
+
+        const stopBeepSync = () => {
           stopUserUploadedBeep();
-        }, 3400);
+          if (speechCheckTimer) {
+            clearInterval(speechCheckTimer);
+            speechCheckTimer = null;
+          }
+          currentSpeechUtterance = null;
+        };
+
+        // 1. Start background beep in EXACT sync with the voice onset!
+        utter.onstart = function() {
+          startBeepSync();
+        };
+
+        // 2. Play the beep continuously until the voice COMPLETELY finishes speaking!
+        utter.onend = function() {
+          stopBeepSync();
+        };
+        utter.onerror = function() {
+          stopBeepSync();
+        };
+
+        window.speechSynthesis.speak(utter);
+
+        // Watchdog for mobile browsers:
+        let checkCount = 0;
+        speechCheckTimer = setInterval(() => {
+          checkCount++;
+          // Fallback if mobile delayed onstart but voice is actively speaking
+          if (!beepStarted && checkCount >= 6 && window.speechSynthesis.speaking) {
+            startBeepSync();
+          }
+          // If speech is done, stop beep immediately!
+          if (!window.speechSynthesis.speaking && checkCount > 5) {
+            stopBeepSync();
+          }
+          // Safety cap (12s)
+          if (checkCount > 120) {
+            stopBeepSync();
+          }
+        }, 100);
+
+      } catch (e) {
+        console.warn("Speech error:", e);
+        playUserUploadedBeep();
+        setTimeout(() => stopUserUploadedBeep(), 4000);
       }
     }
 
@@ -1479,7 +1581,8 @@
         const audio = initUserBeepAudio();
         if (audio) {
           audio.currentTime = 0;
-          audio.volume = 0.45; // Gently reduced volume as requested (subtle background level)
+          audio.loop = true; // Continuous loop so beep plays for entire duration of the speech!
+          audio.volume = 0.32; // Gently reduced volume as requested (subtle background siren level)
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise.catch(err => {
@@ -1497,13 +1600,9 @@
     }
 
     function triggerSystemChangeAlert(message) {
-      // 1. Play user's uploaded beep in the background!
-      playUserUploadedBeep();
-      // 2. Play alert chime at onset
-      playChangeSound(true);
-      // 3. Spoken voice announces simultaneously over the beep
+      // Announce with man's voice and perfectly synchronized background beep
       announceSystemVoiceAlert(message);
-      // 4. Visual top notification banner
+      // Visual top notification banner
       showSystemAlertNotification(message);
     }
 
