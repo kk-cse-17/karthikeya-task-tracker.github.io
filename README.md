@@ -10,16 +10,6 @@ Access the live tracker on GitHub Pages:
 
 ---
 
-## 🔑 Login Credentials
-
-The login screen is branded **"karthikeya"** and prompts for username and password.
-
-| User Profile | Username | Password | Role & Purpose |
-| :--- | :--- | :--- | :--- |
-| **👦 Karthikeya** | `karthikeya` | `study123` | Log daily tasks, enter study topics, and record time spent. |
-| **👨‍👦 Dad** | `dad` | `dad123` | Review Karthikeya's daily tasks, approve work, and write comments. |
-
-*(You can also use the 1-click Quick Login buttons on the sign-in screen).*
 
 ---
 
