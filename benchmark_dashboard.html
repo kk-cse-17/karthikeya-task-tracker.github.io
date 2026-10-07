@@ -8,6 +8,8 @@
   <!-- Firebase App & Database SDKs for Real-time Shared Table -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <!-- User Custom Alert Beep Audio -->
+  <script src="alert_sound_data.js"></script>
   <style>
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
@@ -1210,8 +1212,24 @@
 
     // Unlock audio context and speech synthesis on initial user click or interaction
     let isAudioUnlocked = false;
+    let userBeepAudio = null;
+
+    function initUserBeepAudio() {
+      if (!userBeepAudio) {
+        try {
+          const src = (typeof USER_BEEP_DATA_URI !== 'undefined' && USER_BEEP_DATA_URI) ? USER_BEEP_DATA_URI : 'alert_beep.mp3';
+          userBeepAudio = new Audio(src);
+          userBeepAudio.load();
+        } catch (e) {
+          console.warn("User beep audio init notice:", e);
+        }
+      }
+      return userBeepAudio;
+    }
+
     function unlockAudio() {
       getAudioContext();
+      initUserBeepAudio();
       if (!isAudioUnlocked && 'speechSynthesis' in window) {
         try {
           const silent = new SpeechSynthesisUtterance('');
@@ -1410,12 +1428,35 @@
       }
     }
 
+    // Play user uploaded custom beep in background of system voice alert
+    function playUserUploadedBeep() {
+      try {
+        const audio = initUserBeepAudio();
+        if (audio) {
+          audio.currentTime = 0;
+          audio.volume = 0.65; // Balanced background level so the voice is clearly heard
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(err => {
+              console.warn("User beep play notice:", err);
+              playAlarmSiren(3.8); // Fallback to synthetic siren if audio playback is blocked
+            });
+          }
+        } else {
+          playAlarmSiren(3.8);
+        }
+      } catch (e) {
+        console.warn("User beep play exception:", e);
+        playAlarmSiren(3.8);
+      }
+    }
+
     function triggerSystemChangeAlert(message) {
-      // 1. Play background alarm siren
-      playAlarmSiren(3.8);
+      // 1. Play user's uploaded beep in the background!
+      playUserUploadedBeep();
       // 2. Play alert chime at onset
       playChangeSound(true);
-      // 3. Spoken voice announces simultaneously over the siren
+      // 3. Spoken voice announces simultaneously over the beep
       announceSystemVoiceAlert(message);
       // 4. Visual top notification banner
       showSystemAlertNotification(message);
