@@ -1360,8 +1360,9 @@
       window.speechSynthesis.onvoiceschanged = () => { loadVoices(); };
     }
 
-    // Select a pleasant, high quality natural system voice across mobile and desktop
-    function getNiceSystemVoice() {
+    // Specifically selects a natural MALE voice for laptop/PC (Microsoft David, Mark, Guy, etc.)
+    // and nice natural voice for mobile
+    function getVoiceForAlert() {
       if (!('speechSynthesis' in window)) return null;
       let voices = loadVoices();
       if (!voices || !voices.length) {
@@ -1369,17 +1370,17 @@
       }
       if (!voices || !voices.length) return null;
 
-      // Filter to English voices
       const enVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
       const pool = enVoices.length ? enVoices : voices;
 
-      // Prefer top-quality, natural/enhanced English voices
-      const preferredKeywords = [
-        'natural', 'google', 'microsoft', 'enhanced', 'siri', 
-        'david', 'mark', 'daniel', 'samantha', 'karen', 'george'
+      // 1. Priority 1: Clear English MALE voices on laptop (Microsoft David is the standard Windows male voice, Mark, Guy, etc.)
+      const maleKeywords = [
+        'david', 'mark', 'guy', 'christopher', 'daniel', 'alex', 
+        'george', 'ryan', 'male', 'google uk english male', 
+        'en-us-x-iol', 'en-us-x-iom', 'en-gb-x-rjs'
       ];
 
-      for (const kw of preferredKeywords) {
+      for (const kw of maleKeywords) {
         const found = pool.find(v => {
           const name = (v.name || '').toLowerCase();
           const uri = (v.voiceURI || '').toLowerCase();
@@ -1388,10 +1389,18 @@
         if (found) return found;
       }
 
-      const defaultVoice = pool.find(v => v.default);
-      if (defaultVoice) return defaultVoice;
+      // 2. Filter out female voices (Zira, Samantha, etc.)
+      const femaleKeywords = ['zira', 'female', 'jenny', 'aria', 'samantha', 'victoria', 'karen', 'susan', 'hazel', 'eva'];
+      const nonFemale = pool.find(v => {
+        const name = (v.name || '').toLowerCase();
+        const uri = (v.voiceURI || '').toLowerCase();
+        return !femaleKeywords.some(fk => name.includes(fk) || uri.includes(fk));
+      });
+      if (nonFemale) return nonFemale;
 
-      return pool[0] || voices[0];
+      // 3. Fallback to default or any English voice
+      const defaultVoice = pool.find(v => v.default);
+      return defaultVoice || pool[0] || voices[0];
     }
 
     let currentSpeechUtterance = null; // Stored globally to prevent Android garbage collection
@@ -1415,14 +1424,14 @@
         const utter = new SpeechSynthesisUtterance(text);
         currentSpeechUtterance = utter; // Prevent GC on mobile Chrome!
 
-        // Natural, clear speaking rate and pitch - exactly like previous version on laptop,
-        // and crisp, natural and pleasant on mobile!
+        // Natural, clear speaking rate and pitch (1.0) - natural male voice on laptop,
+        // without artificial bassiness or awkwardness!
         utter.rate = 1.0;
         utter.pitch = 1.0;
         utter.volume = 1.0;
 
-        const bestVoice = getNiceSystemVoice();
-        if (bestVoice) utter.voice = bestVoice;
+        const alertVoice = getVoiceForAlert();
+        if (alertVoice) utter.voice = alertVoice;
 
         let beepStarted = false;
         const startBeepSync = () => {
