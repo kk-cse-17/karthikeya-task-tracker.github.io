@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <!-- User Custom Alert Beep Audio -->
-  <script src="alert_sound_data.js?v=2"></script>
+  <script src="alert_sound_data.js?v=3"></script>
   <style>
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
@@ -1217,7 +1217,7 @@
     function initUserBeepAudio() {
       if (!userBeepAudio) {
         try {
-          const src = (typeof USER_BEEP_DATA_URI !== 'undefined' && USER_BEEP_DATA_URI) ? USER_BEEP_DATA_URI : 'alert_beep.mp3?v=2';
+          const src = (typeof USER_BEEP_DATA_URI !== 'undefined' && USER_BEEP_DATA_URI) ? USER_BEEP_DATA_URI : 'alert_beep.mp3?v=3';
           userBeepAudio = new Audio(src);
           userBeepAudio.load();
         } catch (e) {
