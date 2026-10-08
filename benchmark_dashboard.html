@@ -1354,8 +1354,8 @@
     }
 
     function announceSystemVoiceAlert(text) {
-      // Voice removed as requested: play ONLY the beep for the duration the voice had been on (~3.6s)
-      playUserUploadedBeep(3.6);
+      // Voice removed as requested: play ONLY the beep for 4.1s
+      playUserUploadedBeep(4.1);
     }
 
     function showSystemAlertNotification(message) {
@@ -1371,7 +1371,7 @@
     }
 
     // Emergency / tactical alarm siren sound playing in background while system voice speaks
-    function playAlarmSiren(durationSeconds = 3.8) {
+    function playAlarmSiren(durationSeconds = 4.1) {
       try {
         const ctx = getAudioContext();
         if (!ctx) return;
@@ -1437,8 +1437,8 @@
       }
     }
 
-    // Play user uploaded custom beep/siren for the exact duration the voice was on (~3.6s) with NO voice
-    function playUserUploadedBeep(durationSeconds = 3.6) {
+    // Play user uploaded custom beep/siren for 4.1s with NO voice
+    function playUserUploadedBeep(durationSeconds = 4.1) {
       try {
         stopUserUploadedBeep();
         const audio = initUserBeepAudio();
@@ -1472,8 +1472,8 @@
       if ('speechSynthesis' in window) {
         try { window.speechSynthesis.cancel(); } catch (e) {}
       }
-      // 2. Play ONLY the custom alert beep for the exact duration the voice was on (~3.6s)
-      playUserUploadedBeep(3.6);
+      // 2. Play ONLY the custom alert beep for 4.1s
+      playUserUploadedBeep(4.1);
       // 3. Visual top notification banner
       showSystemAlertNotification(message);
     }
